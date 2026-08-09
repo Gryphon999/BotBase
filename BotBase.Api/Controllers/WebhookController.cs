@@ -85,8 +85,9 @@ public class WebhookController(
 
         var messages = await db.Messages
             .Where(m => m.ConversationId == conversationId)
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(10)
             .OrderBy(m => m.CreatedAt)
-            .TakeLast(10)
             .ToListAsync();
 
         var history = messages.Select(m => (m.Role, m.Content)).ToList();
