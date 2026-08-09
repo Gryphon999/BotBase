@@ -39,7 +39,15 @@ public class WebhookController(
         });
         await db.SaveChangesAsync();
 
-        var reply = await GenerateReplyAsync(business, conversation.Id, text);
+        string reply;
+        try
+        {
+            reply = await GenerateReplyAsync(business, conversation.Id, text);
+        }
+        catch
+        {
+            reply = "Извините, сервис временно недоступен. Попробуйте чуть позже.";
+        }
 
         db.Messages.Add(new DbMessage
         {
