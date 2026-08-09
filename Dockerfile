@@ -17,7 +17,4 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /api-out .
 
-ENV ASPNETCORE_URLS=http://+:$PORT
-ENV PORT=8080
-
 ENTRYPOINT ["dotnet", "BotBase.Api.dll"]
