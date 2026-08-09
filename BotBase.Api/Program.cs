@@ -57,7 +57,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseBlazorFrameworkFiles();
-app.MapStaticAssets();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
