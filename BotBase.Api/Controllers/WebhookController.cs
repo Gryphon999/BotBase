@@ -73,12 +73,24 @@ public class WebhookController(
 
     private async Task<string> GenerateReplyAsync(DbBusiness business, Guid conversationId, string userText)
     {
-        // TODO: реализовать самостоятельно
-        // 1. Собери текст всех KnowledgeChunks в одну строку через string.Join
-        // 2. Сформируй systemPrompt — кто ты, какой бизнес, и база знаний
-        // 3. Загрузи последние 10 сообщений разговора из db.Messages (OrderBy CreatedAt, TakeLast(10))
-        // 4. Преврати их в List<(string role, string content)>
-        // 5. Вызови anthropic.CompleteAsync(systemPrompt, history) и верни результат
-        throw new NotImplementedException("Реализуй этот метод!");
+        var knowledgeText = string.Join("\n\n", business.KnowledgeChunks.Select(c => c.ExtractedText));
+
+        var systemPrompt = $"""
+            Ты ассистент компании "{business.BusinessName}".
+            Отвечай только на вопросы, связанные с бизнесом. Будь вежлив и конкретен.
+
+            База знаний:
+            {knowledgeText}
+            """;
+
+        var messages = await db.Messages
+            .Where(m => m.ConversationId == conversationId)
+            .OrderBy(m => m.CreatedAt)
+            .TakeLast(10)
+            .ToListAsync();
+
+        var history = messages.Select(m => (m.Role, m.Content)).ToList();
+
+        return await anthropic.CompleteAsync(systemPrompt, history);
     }
 }
