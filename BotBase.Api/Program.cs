@@ -5,9 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 var connectionString = GetConnectionString();
 builder.Services.AddDbContext<AppDbContext>(opt => opt.UseNpgsql(connectionString));
