@@ -7,32 +7,35 @@ public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration con
 {
     public async Task<string> CompleteAsync(string systemPrompt, List<(string role, string content)> history)
     {
+        var apiKey = config["Anthropic:ApiKey"];
         var client = httpFactory.CreateClient();
-        client.DefaultRequestHeaders.Add("x-api-key", config["Anthropic:ApiKey"]);
-        client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
 
-        var request = new AnthropicRequest(
-            Model: "claude-haiku-4-5-20251001",
-            MaxTokens: 1024,
-            System: systemPrompt,
-            Messages: history.Select(h => new AnthropicMsg(h.role, h.content)).ToList());
+        var request = new GeminiRequest(
+            SystemInstruction: new GeminiSystem([new GeminiPart(systemPrompt)]),
+            Contents: history.Select(h => new GeminiContent(
+                Role: h.role == "assistant" ? "model" : "user",
+                Parts: [new GeminiPart(h.content)])).ToList());
 
-        var response = await client.PostAsJsonAsync("https://api.anthropic.com/v1/messages", request);
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={apiKey}";
+        var response = await client.PostAsJsonAsync(url, request);
         response.EnsureSuccessStatusCode();
 
-        var result = await response.Content.ReadFromJsonAsync<AnthropicResponse>();
-        return result?.Content.FirstOrDefault()?.Text ?? "Не удалось получить ответ";
+        var result = await response.Content.ReadFromJsonAsync<GeminiResponse>();
+        return result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text
+               ?? "Не удалось получить ответ";
     }
 
-    private record AnthropicRequest(
-        string Model,
-        [property: JsonPropertyName("max_tokens")] int MaxTokens,
-        string System,
-        List<AnthropicMsg> Messages);
+    private record GeminiRequest(
+        [property: JsonPropertyName("system_instruction")] GeminiSystem SystemInstruction,
+        List<GeminiContent> Contents);
 
-    private record AnthropicMsg(string Role, string Content);
+    private record GeminiSystem(List<GeminiPart> Parts);
 
-    private record AnthropicResponse(List<AnthropicContent> Content);
+    private record GeminiContent(string Role, List<GeminiPart> Parts);
 
-    private record AnthropicContent(string Type, string Text);
+    private record GeminiPart(string Text);
+
+    private record GeminiResponse(List<GeminiCandidate>? Candidates);
+
+    private record GeminiCandidate(GeminiContent? Content);
 }
