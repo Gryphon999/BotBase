@@ -2,11 +2,12 @@
 
 <MudLayout>
     <MudAppBar Elevation="1">
-        <MudText Typo="Typo.h6">BotBase</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" OnClick="ToggleDrawer" />
+        <MudText Typo="Typo.h6" Class="ml-3">BotBase</MudText>
         <MudSpacer />
-        <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" Href="/login" />
+        <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" OnClick="Logout" Title="Выйти" />
     </MudAppBar>
-    <MudDrawer Open="true" Elevation="2">
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" ClipMode="DrawerClipMode.Always">
         <MudNavMenu>
             <MudNavLink Href="/dashboard" Icon="@Icons.Material.Filled.Dashboard">Главная</MudNavLink>
             <MudNavLink Href="/bot-setup" Icon="@Icons.Material.Filled.SmartToy">Настройка бота</MudNavLink>
@@ -18,3 +19,18 @@
         @Body
     </MudMainContent>
 </MudLayout>
+
+@code {
+    bool _drawerOpen = true;
+
+    void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    [Inject] NavigationManager Nav { get; set; } = default!;
+    [Inject] IJSRuntime JS { get; set; } = default!;
+
+    async Task Logout()
+    {
+        await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+        Nav.NavigateTo("/login");
+    }
+}
