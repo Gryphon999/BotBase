@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="BotBase.Api/BotBase.Api.csproj" />
+  <Project Path="BotBase.BlazorUI/BotBase.BlazorUI.csproj" />
+</Solution>
