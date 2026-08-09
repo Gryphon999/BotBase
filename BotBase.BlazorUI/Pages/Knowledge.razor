@@ -1,0 +1,118 @@
+@page "/knowledge"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<MudText Typo="Typo.h4" Class="mb-4">База знаний</MudText>
+
+<MudPaper Class="pa-6 mb-6">
+    <MudText Typo="Typo.h6" Class="mb-3">Загрузить файл</MudText>
+    <MudText Typo="Typo.body2" Class="mb-4">
+        Поддерживаются форматы: PDF, Word (.docx), Excel (.xlsx/.xls), текст (.txt). Макс. размер 10 МБ.
+    </MudText>
+    <InputFile id="fileInput" OnChange="OnFileSelected" accept=".pdf,.docx,.xlsx,.xls,.txt" style="display:none" />
+    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AttachFile" OnClick="ClickFileInput">
+        Выбрать файл
+    </MudButton>
+    @if (_selectedFile is not null)
+    {
+        <MudText Typo="Typo.body2" Class="mt-2">Выбран: @_selectedFile.Name (@(_selectedFile.Size / 1024) КБ)</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Upload" Disabled="_uploading" Class="mt-2">
+            @(_uploading ? "Загружаем..." : "Загрузить")
+        </MudButton>
+    }
+    @if (_uploadError is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-3">@_uploadError</MudAlert>
+    }
+    @if (_uploadSuccess)
+    {
+        <MudAlert Severity="Severity.Success" Class="mt-3">Файл успешно загружен!</MudAlert>
+    }
+</MudPaper>
+
+<MudText Typo="Typo.h6" Class="mb-3">Загруженные файлы</MudText>
+@if (_chunks is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_chunks.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Файлы ещё не загружены. Добавьте меню, прайс-лист или FAQ.</MudAlert>
+}
+else
+{
+    <MudTable Items="_chunks" Hover="true">
+        <HeaderContent>
+            <MudTh>Файл</MudTh>
+            <MudTh>Размер текста</MudTh>
+            <MudTh>Дата</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.FileName</MudTd>
+            <MudTd>@context.TextLength символов</MudTd>
+            <MudTd>@context.UploadedAt.ToString("dd.MM.yyyy HH:mm")</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Color="Color.Error"
+                               OnClick="() => Delete(context.Id)" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    List<KnowledgeChunkResponse>? _chunks;
+    IBrowserFile? _selectedFile;
+    bool _uploading, _uploadSuccess;
+    string? _uploadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
+        if (token is null) { Nav.NavigateTo("/login"); return; }
+        Api.SetToken(token);
+        await LoadChunks();
+    }
+
+    async Task LoadChunks()
+    {
+        var resp = await Api.GetKnowledgeAsync();
+        if (resp.IsSuccessStatusCode)
+            _chunks = await resp.Content.ReadFromJsonAsync<List<KnowledgeChunkResponse>>();
+    }
+
+    async Task ClickFileInput() => await JS.InvokeVoidAsync("eval", "document.getElementById('fileInput').click()");
+
+    void OnFileSelected(InputFileChangeEventArgs e) => _selectedFile = e.File;
+
+    async Task Upload()
+    {
+        if (_selectedFile is null) return;
+        _uploading = true;
+        _uploadError = null;
+        _uploadSuccess = false;
+
+        var resp = await Api.UploadFileAsync(_selectedFile);
+        if (resp.IsSuccessStatusCode)
+        {
+            _uploadSuccess = true;
+            _selectedFile = null;
+            await LoadChunks();
+        }
+        else
+        {
+            _uploadError = "Ошибка загрузки. Проверьте формат и размер файла.";
+        }
+        _uploading = false;
+    }
+
+    async Task Delete(Guid id)
+    {
+        await Api.DeleteKnowledgeAsync(id);
+        await LoadChunks();
+    }
+
+    record KnowledgeChunkResponse(Guid Id, string FileName, DateTime UploadedAt, int TextLength);
+}

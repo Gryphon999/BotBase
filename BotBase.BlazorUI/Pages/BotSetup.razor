@@ -1,0 +1,56 @@
+@page "/bot-setup"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<MudText Typo="Typo.h4" Class="mb-4">Настройка бота</MudText>
+
+<MudPaper Class="pa-6" MaxWidth="600px">
+    <MudText Typo="Typo.body1" Class="mb-4">
+        Создайте бота через <strong>@BotFather</strong> в Telegram и вставьте токен ниже.
+        Мы автоматически зарегистрируем webhook — ваш бот начнёт принимать сообщения сразу после сохранения.
+    </MudText>
+    <MudTextField @bind-Value="_token"
+                  Label="Bot Token (например: 123456:ABC-DEF1234...)"
+                  Variant="Variant.Outlined"
+                  Class="mb-4" />
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    }
+    @if (_success)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-4">Бот успешно подключён!</MudAlert>
+    }
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_loading">
+        @(_loading ? "Сохраняем..." : "Сохранить")
+    </MudButton>
+</MudPaper>
+
+@code {
+    string _token = "";
+    string? _error;
+    bool _success, _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
+        if (token is null) { Nav.NavigateTo("/login"); return; }
+        Api.SetToken(token);
+    }
+
+    async Task Save()
+    {
+        _loading = true;
+        _error = null;
+        _success = false;
+        var resp = await Api.SetupBotAsync(_token.Trim());
+        if (resp.IsSuccessStatusCode)
+            _success = true;
+        else
+            _error = "Не удалось подключить бота. Проверьте токен и попробуйте снова.";
+        _loading = false;
+    }
+
+    const string BotFather = "@BotFather";
+}

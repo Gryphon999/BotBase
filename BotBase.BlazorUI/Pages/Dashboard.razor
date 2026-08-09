@@ -1,0 +1,74 @@
+@page "/dashboard"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<MudText Typo="Typo.h4" Class="mb-4">Панель управления</MudText>
+
+@if (_status is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudAlert Severity="@(_status.HasBot ? Severity.Success : Severity.Warning)" Class="mb-4">
+        @(_status.HasBot
+            ? $"✓ Бот @{_status.BotUsername} активен и отвечает клиентам"
+            : "Бот не настроен. Перейдите в «Настройка бота» и введите токен.")
+    </MudAlert>
+
+    <MudGrid>
+        <MudItem xs="12" sm="4">
+            <MudCard>
+                <MudCardContent>
+                    <MudText Typo="Typo.h6">Настройка бота</MudText>
+                    <MudText Typo="Typo.body2" Class="mt-1">Подключите Telegram-бота</MudText>
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton Href="/bot-setup" Variant="Variant.Outlined" Color="Color.Primary">Перейти</MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudCard>
+                <MudCardContent>
+                    <MudText Typo="Typo.h6">База знаний</MudText>
+                    <MudText Typo="Typo.body2" Class="mt-1">Загрузите файлы с информацией о бизнесе</MudText>
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton Href="/knowledge" Variant="Variant.Outlined" Color="Color.Primary">Перейти</MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudCard>
+                <MudCardContent>
+                    <MudText Typo="Typo.h6">Разговоры</MudText>
+                    <MudText Typo="Typo.body2" Class="mt-1">История диалогов клиентов с ботом</MudText>
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton Href="/conversations" Variant="Variant.Outlined" Color="Color.Primary">Перейти</MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    BotStatusResponse? _status;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
+        if (token is null) { Nav.NavigateTo("/login"); return; }
+        Api.SetToken(token);
+
+        var resp = await Api.GetBotStatusAsync();
+        if (resp.IsSuccessStatusCode)
+            _status = await resp.Content.ReadFromJsonAsync<BotStatusResponse>();
+        else
+            _status = new BotStatusResponse(false, null, false);
+    }
+
+    record BotStatusResponse(bool HasBot, string? BotUsername, bool IsActive);
+}

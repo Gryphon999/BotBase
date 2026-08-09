@@ -1,16 +1,20 @@
-﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@inherits LayoutComponentBase
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudText Typo="Typo.h6">BotBase</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" Href="/login" />
+    </MudAppBar>
+    <MudDrawer Open="true" Elevation="2">
+        <MudNavMenu>
+            <MudNavLink Href="/dashboard" Icon="@Icons.Material.Filled.Dashboard">Главная</MudNavLink>
+            <MudNavLink Href="/bot-setup" Icon="@Icons.Material.Filled.SmartToy">Настройка бота</MudNavLink>
+            <MudNavLink Href="/knowledge" Icon="@Icons.Material.Filled.MenuBook">База знаний</MudNavLink>
+            <MudNavLink Href="/conversations" Icon="@Icons.Material.Filled.Forum">Разговоры</MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+    <MudMainContent Class="pa-6">
+        @Body
+    </MudMainContent>
+</MudLayout>

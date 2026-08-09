@@ -1,0 +1,60 @@
+@page "/register"
+@layout EmptyLayout
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<MudThemeProvider />
+<MudPopoverProvider />
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="height:100vh">
+    <MudCard Style="width:100%">
+        <MudCardHeader>
+            <MudText Typo="Typo.h5">Регистрация в BotBase</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTextField @bind-Value="_businessName" Label="Название бизнеса" Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField @bind-Value="_email" Label="Email" InputType="InputType.Email" Variant="Variant.Outlined" Class="mb-3" />
+            <MudTextField @bind-Value="_password" Label="Пароль" InputType="InputType.Password" Variant="Variant.Outlined" />
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
+            }
+        </MudCardContent>
+        <MudCardActions Class="px-4 pb-4">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit" Disabled="_loading" FullWidth="true">
+                @(_loading ? "Регистрируем..." : "Зарегистрироваться")
+            </MudButton>
+        </MudCardActions>
+        <MudCardActions Class="px-4 pb-4">
+            <MudButton Href="/login" Variant="Variant.Text" FullWidth="true">Уже есть аккаунт? Войти</MudButton>
+        </MudCardActions>
+    </MudCard>
+</MudContainer>
+
+@code {
+    string _businessName = "", _email = "", _password = "";
+    string? _error;
+    bool _loading;
+
+    async Task Submit()
+    {
+        _loading = true;
+        _error = null;
+        var resp = await Api.RegisterAsync(_email, _password, _businessName);
+        if (resp.IsSuccessStatusCode)
+        {
+            var result = await resp.Content.ReadFromJsonAsync<LoginResponse>();
+            await JS.InvokeVoidAsync("localStorage.setItem", "jwt", result!.Token);
+            Api.SetToken(result.Token);
+            Nav.NavigateTo("/dashboard");
+        }
+        else
+        {
+            _error = "Email уже используется или ошибка сервера";
+        }
+        _loading = false;
+    }
+
+    record LoginResponse(string Token, string BusinessName);
+}

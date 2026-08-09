@@ -1,0 +1,49 @@
+@page "/conversations"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<MudText Typo="Typo.h4" Class="mb-4">Разговоры</MudText>
+
+@if (_conversations is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_conversations.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        Диалогов пока нет. Клиенты начнут писать боту — разговоры появятся здесь.
+    </MudAlert>
+}
+else
+{
+    <MudTable Items="_conversations" Hover="true">
+        <HeaderContent>
+            <MudTh>Telegram Chat ID</MudTh>
+            <MudTh>Начало диалога</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.TelegramChatId</MudTd>
+            <MudTd>@context.StartedAt.ToString("dd.MM.yyyy HH:mm")</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    List<ConversationResponse>? _conversations;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
+        if (token is null) { Nav.NavigateTo("/login"); return; }
+        Api.SetToken(token);
+
+        var resp = await Api.GetConversationsAsync();
+        if (resp.IsSuccessStatusCode)
+            _conversations = await resp.Content.ReadFromJsonAsync<List<ConversationResponse>>();
+        else
+            _conversations = [];
+    }
+
+    record ConversationResponse(Guid Id, long TelegramChatId, DateTime StartedAt);
+}
