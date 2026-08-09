@@ -17,4 +17,4 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /api-out .
 
-ENTRYPOINT ["dotnet", "BotBase.Api.dll"]
+ENTRYPOINT ["/bin/sh", "-c", "ASPNETCORE_HTTP_PORTS=$PORT dotnet BotBase.Api.dll"]
