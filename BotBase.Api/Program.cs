@@ -30,6 +30,7 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TelegramService>();
 builder.Services.AddScoped<AnthropicService>();
 builder.Services.AddScoped<FileParserService>();
+builder.Services.AddSingleton<GeminiRateLimiter>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

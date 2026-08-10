@@ -3,10 +3,13 @@ using System.Text.Json.Serialization;
 
 namespace BotBase.Api.Services;
 
-public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration config, ILogger<AnthropicService> logger)
+public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration config, ILogger<AnthropicService> logger, GeminiRateLimiter rateLimiter)
 {
     public async Task<string> CompleteAsync(string systemPrompt, List<(string role, string content)> history)
     {
+        if (!rateLimiter.TryAcquire())
+            throw new InvalidOperationException("Превышен лимит запросов к Gemini. Попробуйте через минуту.");
+
         var apiKey = config["Anthropic:ApiKey"];
         var client = httpFactory.CreateClient();
 
