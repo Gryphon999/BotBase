@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace BotBase.Api.Services;
 
-public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration config)
+public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration config, ILogger<AnthropicService> logger)
 {
     public async Task<string> CompleteAsync(string systemPrompt, List<(string role, string content)> history)
     {
@@ -18,7 +18,13 @@ public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration con
 
         var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={apiKey}";
         var response = await client.PostAsJsonAsync(url, request);
-        response.EnsureSuccessStatusCode();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync();
+            logger.LogError("Gemini error {StatusCode}: {Body}", (int)response.StatusCode, errorBody);
+            response.EnsureSuccessStatusCode();
+        }
 
         var result = await response.Content.ReadFromJsonAsync<GeminiResponse>();
         return result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text
