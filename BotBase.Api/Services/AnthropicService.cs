@@ -12,7 +12,7 @@ public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration con
 
         var apiKey = config["Anthropic:ApiKey"];
         var client = httpFactory.CreateClient();
-        client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
 
         var messages = new List<ChatMessage> { new("system", systemPrompt) };
         messages.AddRange(history.Select(h => new ChatMessage(h.role, h.content)));
