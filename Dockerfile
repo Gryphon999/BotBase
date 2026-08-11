@@ -8,8 +8,8 @@ RUN dotnet restore BotBase.BlazorUI/BotBase.BlazorUI.csproj
 
 COPY . .
 
-RUN dotnet publish BotBase.BlazorUI/BotBase.BlazorUI.csproj -c Release -o /blazor-out
-RUN dotnet publish BotBase.Api/BotBase.Api.csproj -c Release -o /api-out
+RUN dotnet publish BotBase.BlazorUI/BotBase.BlazorUI.csproj -c Release -o /blazor-out --verbosity minimal
+RUN dotnet publish BotBase.Api/BotBase.Api.csproj -c Release -o /api-out --verbosity minimal
 RUN cp -r /blazor-out/wwwroot/. /api-out/wwwroot/
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
