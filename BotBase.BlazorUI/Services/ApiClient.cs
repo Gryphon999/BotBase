@@ -43,4 +43,16 @@ public class ApiClient(HttpClient http)
 
     public Task<HttpResponseMessage> GetMessagesAsync(Guid conversationId) =>
         http.GetAsync($"api/conversations/{conversationId}/messages");
+
+    public Task<HttpResponseMessage> GetProceduresAsync() =>
+        http.GetAsync("api/procedures");
+
+    public Task<HttpResponseMessage> CreateProcedureAsync(string name, int durationMinutes, decimal price) =>
+        http.PostAsJsonAsync("api/procedures", new { name, durationMinutes, price });
+
+    public Task<HttpResponseMessage> UpdateProcedureAsync(Guid id, string name, int durationMinutes, decimal price) =>
+        http.PutAsJsonAsync($"api/procedures/{id}", new { name, durationMinutes, price });
+
+    public Task<HttpResponseMessage> DeleteProcedureAsync(Guid id) =>
+        http.DeleteAsync($"api/procedures/{id}");
 }

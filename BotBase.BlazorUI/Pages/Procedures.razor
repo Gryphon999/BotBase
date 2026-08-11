@@ -1,0 +1,145 @@
+@page "/procedures"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<MudText Typo="Typo.h4" Class="mb-4">Процедуры</MudText>
+
+@if (_procedures is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mb-4"
+               OnClick="ShowAddForm">+ Добавить процедуру</MudButton>
+
+    @if (_showForm)
+    {
+        <MudCard Class="mb-4" Elevation="2">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" Class="mb-3">@(_editId is null ? "Новая процедура" : "Редактировать")</MudText>
+                <MudTextField @bind-Value="_formName" Label="Название" Required="true" Class="mb-3" />
+                <MudNumericField @bind-Value="_formDuration" Label="Длительность (минуты)" Min="1" Class="mb-3" />
+                <MudNumericField @bind-Value="_formPrice" Label="Цена (₽)" Min="0" Format="F0" Class="mb-3" />
+                @if (_formError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-2">@_formError</MudAlert>
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           OnClick="SaveProcedure" Disabled="_saving">Сохранить</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="CancelForm" Class="ml-2">Отмена</MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+
+    @if (_procedures.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">Процедур пока нет. Добавьте первую.</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_procedures" Hover="true">
+            <HeaderContent>
+                <MudTh>Название</MudTh>
+                <MudTh>Длительность</MudTh>
+                <MudTh>Цена</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name</MudTd>
+                <MudTd>@context.DurationMinutes мин</MudTd>
+                <MudTd>@context.Price.ToString("F0") ₽</MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   OnClick="() => ShowEditForm(context)" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                   Color="Color.Error" OnClick="() => DeleteProcedure(context.Id)" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+}
+
+@code {
+    List<ProcedureDto>? _procedures;
+    bool _showForm;
+    bool _saving;
+    Guid? _editId;
+    string _formName = "";
+    int _formDuration = 60;
+    decimal _formPrice = 0;
+    string? _formError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
+        if (token is null) { Nav.NavigateTo("/login"); return; }
+        Api.SetToken(token);
+        await LoadProcedures();
+    }
+
+    async Task LoadProcedures()
+    {
+        var resp = await Api.GetProceduresAsync();
+        _procedures = resp.IsSuccessStatusCode
+            ? await resp.Content.ReadFromJsonAsync<List<ProcedureDto>>()
+            : [];
+    }
+
+    void ShowAddForm()
+    {
+        _editId = null;
+        _formName = "";
+        _formDuration = 60;
+        _formPrice = 0;
+        _formError = null;
+        _showForm = true;
+    }
+
+    void ShowEditForm(ProcedureDto p)
+    {
+        _editId = p.Id;
+        _formName = p.Name;
+        _formDuration = p.DurationMinutes;
+        _formPrice = p.Price;
+        _formError = null;
+        _showForm = true;
+    }
+
+    void CancelForm() => _showForm = false;
+
+    async Task SaveProcedure()
+    {
+        _formError = null;
+        _saving = true;
+        HttpResponseMessage resp;
+
+        if (_editId is null)
+            resp = await Api.CreateProcedureAsync(_formName, _formDuration, _formPrice);
+        else
+            resp = await Api.UpdateProcedureAsync(_editId.Value, _formName, _formDuration, _formPrice);
+
+        _saving = false;
+
+        if (resp.IsSuccessStatusCode)
+        {
+            _showForm = false;
+            await LoadProcedures();
+        }
+        else
+        {
+            _formError = "Ошибка сохранения. Проверьте данные.";
+        }
+    }
+
+    async Task DeleteProcedure(Guid id)
+    {
+        await Api.DeleteProcedureAsync(id);
+        await LoadProcedures();
+    }
+
+    record ProcedureDto(Guid Id, string Name, int DurationMinutes, decimal Price);
+}
