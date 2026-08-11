@@ -17,7 +17,7 @@ public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration con
         var messages = new List<ChatMessage> { new("system", systemPrompt) };
         messages.AddRange(history.Select(h => new ChatMessage(h.role, h.content)));
 
-        var request = new ChatRequest("gemini-2.5-flash-lite", messages);
+        var request = new ChatRequest("gemini-2.5-pro", messages);
         var url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
         var response = await client.PostAsJsonAsync(url, request);
