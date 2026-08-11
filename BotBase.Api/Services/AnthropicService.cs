@@ -19,7 +19,7 @@ public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration con
                 Role: h.role == "assistant" ? "model" : "user",
                 Parts: [new GeminiPart(h.content)])).ToList());
 
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={apiKey}";
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
         var response = await client.PostAsJsonAsync(url, request);
 
         if (!response.IsSuccessStatusCode)
