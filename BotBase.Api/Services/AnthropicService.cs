@@ -12,14 +12,14 @@ public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration con
 
         var apiKey = config["Anthropic:ApiKey"];
         var client = httpFactory.CreateClient();
+        client.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
 
-        var request = new GeminiRequest(
-            SystemInstruction: new GeminiSystem([new GeminiPart(systemPrompt)]),
-            Contents: history.Select(h => new GeminiContent(
-                Role: h.role == "assistant" ? "model" : "user",
-                Parts: [new GeminiPart(h.content)])).ToList());
+        var messages = new List<ChatMessage> { new("system", systemPrompt) };
+        messages.AddRange(history.Select(h => new ChatMessage(h.role, h.content)));
 
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
+        var request = new ChatRequest("gemini-2.5-flash", messages);
+        var url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+
         var response = await client.PostAsJsonAsync(url, request);
 
         if (!response.IsSuccessStatusCode)
@@ -29,22 +29,21 @@ public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration con
             response.EnsureSuccessStatusCode();
         }
 
-        var result = await response.Content.ReadFromJsonAsync<GeminiResponse>();
-        return result?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text
-               ?? "Не удалось получить ответ";
+        var result = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>();
+        return result?.Choices?.FirstOrDefault()?.Message?.Content ?? "Не удалось получить ответ";
     }
 
-    private record GeminiRequest(
-        [property: JsonPropertyName("system_instruction")] GeminiSystem SystemInstruction,
-        List<GeminiContent> Contents);
+    private record ChatMessage(
+        [property: JsonPropertyName("role")] string Role,
+        [property: JsonPropertyName("content")] string Content);
 
-    private record GeminiSystem(List<GeminiPart> Parts);
+    private record ChatRequest(
+        [property: JsonPropertyName("model")] string Model,
+        [property: JsonPropertyName("messages")] List<ChatMessage> Messages);
 
-    private record GeminiContent(string Role, List<GeminiPart> Parts);
+    private record ChatCompletionResponse(
+        [property: JsonPropertyName("choices")] List<ChatChoice>? Choices);
 
-    private record GeminiPart(string Text);
-
-    private record GeminiResponse(List<GeminiCandidate>? Candidates);
-
-    private record GeminiCandidate(GeminiContent? Content);
+    private record ChatChoice(
+        [property: JsonPropertyName("message")] ChatMessage? Message);
 }
