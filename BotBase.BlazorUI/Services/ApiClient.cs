@@ -55,4 +55,10 @@ public class ApiClient(HttpClient http)
 
     public Task<HttpResponseMessage> DeleteProcedureAsync(Guid id) =>
         http.DeleteAsync($"api/procedures/{id}");
+
+    public Task<HttpResponseMessage> GetScheduleAsync() =>
+        http.GetAsync("api/schedule");
+
+    public Task<HttpResponseMessage> SaveScheduleAsync(object rows) =>
+        http.PutAsJsonAsync("api/schedule", rows);
 }

@@ -1,0 +1,127 @@
+@page "/schedule"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<MudText Typo="Typo.h4" Class="mb-4">Рабочее расписание</MudText>
+
+@if (_rows is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_rows" Hover="false" Elevation="1">
+        <HeaderContent>
+            <MudTh>День</MudTh>
+            <MudTh>Рабочий день</MudTh>
+            <MudTh>Начало</MudTh>
+            <MudTh>Конец</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@DayName(context.DayOfWeek)</MudTd>
+            <MudTd>
+                <MudSwitch @bind-Value="context.IsWorkingDay" Color="Color.Primary" />
+            </MudTd>
+            <MudTd>
+                <MudTimePicker Time="context.StartTime"
+                               TimeChanged="t => context.StartTime = t"
+                               Disabled="!context.IsWorkingDay"
+                               AmPm="false" />
+            </MudTd>
+            <MudTd>
+                <MudTimePicker Time="context.EndTime"
+                               TimeChanged="t => context.EndTime = t"
+                               Disabled="!context.IsWorkingDay"
+                               AmPm="false" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+
+    @if (_saveError is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-3">@_saveError</MudAlert>
+    }
+    @if (_saved)
+    {
+        <MudAlert Severity="Severity.Success" Class="mt-3">Расписание сохранено!</MudAlert>
+    }
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               Class="mt-4" OnClick="Save" Disabled="_saving">
+        Сохранить расписание
+    </MudButton>
+}
+
+@code {
+    List<ScheduleRow>? _rows;
+    bool _saving;
+    bool _saved;
+    string? _saveError;
+
+    static string DayName(int day) => day switch
+    {
+        0 => "Понедельник",
+        1 => "Вторник",
+        2 => "Среда",
+        3 => "Четверг",
+        4 => "Пятница",
+        5 => "Суббота",
+        6 => "Воскресенье",
+        _ => ""
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
+        if (token is null) { Nav.NavigateTo("/login"); return; }
+        Api.SetToken(token);
+
+        var resp = await Api.GetScheduleAsync();
+        if (!resp.IsSuccessStatusCode) { _rows = []; return; }
+
+        var dtos = await resp.Content.ReadFromJsonAsync<List<ScheduleDto>>();
+        _rows = dtos?.Select(d => new ScheduleRow
+        {
+            DayOfWeek = d.DayOfWeek,
+            IsWorkingDay = d.IsWorkingDay,
+            StartTime = d.StartTime is not null ? TimeSpan.Parse(d.StartTime) : null,
+            EndTime = d.EndTime is not null ? TimeSpan.Parse(d.EndTime) : null
+        }).ToList() ?? [];
+    }
+
+    async Task Save()
+    {
+        _saving = true;
+        _saved = false;
+        _saveError = null;
+
+        var payload = _rows!.Select(r => new
+        {
+            r.DayOfWeek,
+            r.IsWorkingDay,
+            StartTime = r.IsWorkingDay && r.StartTime.HasValue
+                ? $"{r.StartTime.Value.Hours:D2}:{r.StartTime.Value.Minutes:D2}" : (string?)null,
+            EndTime = r.IsWorkingDay && r.EndTime.HasValue
+                ? $"{r.EndTime.Value.Hours:D2}:{r.EndTime.Value.Minutes:D2}" : (string?)null
+        }).ToList();
+
+        var resp = await Api.SaveScheduleAsync(payload);
+        _saving = false;
+
+        if (resp.IsSuccessStatusCode)
+            _saved = true;
+        else
+            _saveError = "Ошибка сохранения. Проверьте что для рабочих дней указано время.";
+    }
+
+    class ScheduleRow
+    {
+        public int DayOfWeek { get; set; }
+        public bool IsWorkingDay { get; set; }
+        public TimeSpan? StartTime { get; set; }
+        public TimeSpan? EndTime { get; set; }
+    }
+
+    record ScheduleDto(int DayOfWeek, bool IsWorkingDay, string? StartTime, string? EndTime);
+}
