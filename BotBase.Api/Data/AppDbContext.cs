@@ -10,4 +10,5 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<Procedure> Procedures => Set<Procedure>();
+    public DbSet<WorkSchedule> WorkSchedules => Set<WorkSchedule>();
 }

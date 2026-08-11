@@ -23,6 +23,16 @@ public class AuthService(AppDbContext db, IConfiguration config)
             BusinessName = businessName
         };
         db.Businesses.Add(business);
+        var defaultSchedule = Enumerable.Range(0, 7).Select(day => new WorkSchedule
+        {
+            Id = Guid.NewGuid(),
+            BusinessId = business.Id,
+            DayOfWeek = day,
+            IsWorkingDay = day < 5,
+            StartTime = day < 5 ? new TimeOnly(9, 0) : null,
+            EndTime = day < 5 ? new TimeOnly(18, 0) : null
+        });
+        db.WorkSchedules.AddRange(defaultSchedule);
         await db.SaveChangesAsync();
         return business;
     }
