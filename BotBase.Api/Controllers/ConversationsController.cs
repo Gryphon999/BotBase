@@ -22,4 +22,20 @@ public class ConversationsController(AppDbContext db) : ControllerBase
             .ToListAsync();
         return Ok(conversations);
     }
+
+    [HttpGet("{id}/messages")]
+    public async Task<IActionResult> GetMessages(Guid id)
+    {
+        var businessId = User.GetBusinessId();
+        var conv = await db.Conversations
+            .FirstOrDefaultAsync(c => c.Id == id && c.BusinessId == businessId);
+        if (conv is null) return NotFound();
+
+        var messages = await db.Messages
+            .Where(m => m.ConversationId == id)
+            .OrderBy(m => m.CreatedAt)
+            .Select(m => new { m.Role, m.Content, m.CreatedAt })
+            .ToListAsync();
+        return Ok(messages);
+    }
 }

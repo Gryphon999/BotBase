@@ -17,7 +17,8 @@ else if (_conversations.Count == 0)
 }
 else
 {
-    <MudTable Items="_conversations" Hover="true">
+    <MudTable T="ConversationResponse" Items="_conversations" Hover="true"
+              OnRowClick="OpenDrawer" Style="cursor:pointer">
         <HeaderContent>
             <MudTh>Telegram Chat ID</MudTh>
             <MudTh>Начало диалога</MudTh>
@@ -29,8 +30,46 @@ else
     </MudTable>
 }
 
+<MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.End" Elevation="2"
+           Variant="DrawerVariant.Temporary" Width="420px">
+    <MudDrawerHeader>
+        <MudText Typo="Typo.h6">Диалог с клиентом @_selected?.TelegramChatId</MudText>
+    </MudDrawerHeader>
+    <div style="padding:16px; overflow-y:auto; height:calc(100% - 64px); display:flex; flex-direction:column; gap:8px;">
+        @if (_messages is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_messages.Count == 0)
+        {
+            <MudText>Сообщений нет.</MudText>
+        }
+        else
+        {
+            @foreach (var msg in _messages)
+            {
+                var isUser = msg.Role == "user";
+                <div style="display:flex; justify-content:@(isUser ? "flex-end" : "flex-start");">
+                    <div style="max-width:80%; background:@(isUser ? "#1976d2" : "#f5f5f5");
+                                color:@(isUser ? "white" : "#333"); padding:10px 14px;
+                                border-radius:@(isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px");
+                                font-size:14px;">
+                        <div>@msg.Content</div>
+                        <div style="font-size:11px; opacity:0.65; margin-top:4px; text-align:right;">
+                            @msg.CreatedAt.ToLocalTime().ToString("HH:mm")
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</MudDrawer>
+
 @code {
     List<ConversationResponse>? _conversations;
+    List<MessageResponse>? _messages;
+    ConversationResponse? _selected;
+    bool _drawerOpen;
 
     protected override async Task OnInitializedAsync()
     {
@@ -45,5 +84,19 @@ else
             _conversations = [];
     }
 
+    async Task OpenDrawer(TableRowClickEventArgs<ConversationResponse> args)
+    {
+        _selected = args.Item;
+        _messages = null;
+        _drawerOpen = true;
+
+        var resp = await Api.GetMessagesAsync(_selected.Id);
+        if (resp.IsSuccessStatusCode)
+            _messages = await resp.Content.ReadFromJsonAsync<List<MessageResponse>>();
+        else
+            _messages = [];
+    }
+
     record ConversationResponse(Guid Id, long TelegramChatId, DateTime StartedAt);
+    record MessageResponse(string Role, string Content, DateTime CreatedAt);
 }

@@ -40,4 +40,7 @@ public class ApiClient(HttpClient http)
 
     public Task<HttpResponseMessage> GetConversationsAsync() =>
         http.GetAsync("api/conversations");
+
+    public Task<HttpResponseMessage> GetMessagesAsync(Guid conversationId) =>
+        http.GetAsync($"api/conversations/{conversationId}/messages");
 }
