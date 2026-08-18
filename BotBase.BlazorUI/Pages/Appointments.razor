@@ -1,0 +1,127 @@
+@page "/appointments"
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>Записи — BotBase</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">Записи клиентов</MudText>
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudDatePicker Label="Дата" @bind-Date="_selectedDate" DateFormat="dd.MM.yyyy"
+                   Editable="true" Class="mb-2" Style="max-width:220px" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync" Size="Size.Small">
+        Показать
+    </MudButton>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_appointments.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">На выбранную дату записей нет.</MudAlert>
+}
+else
+{
+    <MudTable Items="_appointments" Hover="true" Striped="true" Dense="true">
+        <HeaderContent>
+            <MudTh>Время</MudTh>
+            <MudTh>Процедура</MudTh>
+            <MudTh>Клиент</MudTh>
+            <MudTh>Телефон</MudTh>
+            <MudTh>Длит.</MudTh>
+            <MudTh>Статус</MudTh>
+            <MudTh>Действия</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.ScheduledAt.ToLocalTime().ToString("HH:mm")</MudTd>
+            <MudTd>@context.ProcedureName</MudTd>
+            <MudTd>@context.ClientName</MudTd>
+            <MudTd>@context.ClientPhone</MudTd>
+            <MudTd>@context.DurationMinutes мин</MudTd>
+            <MudTd>
+                <MudChip T="string" Color="@StatusColor(context.Status)" Size="Size.Small">
+                    @StatusLabel(context.Status)
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                @if (context.Status == "Pending")
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small"
+                                   Title="Подтвердить" OnClick="() => SetStatus(context, "Confirmed")" />
+                }
+                @if (context.Status != "Cancelled")
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small"
+                                   Title="Отменить" OnClick="() => SetStatus(context, "Cancelled")" />
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    DateTime? _selectedDate = DateTime.Today;
+    bool _loading;
+    List<AppointmentDto> _appointments = [];
+    string? _token;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+        await LoadAsync();
+    }
+
+    async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var date = (_selectedDate ?? DateTime.Today).ToString("yyyy-MM-dd");
+            var request = new HttpRequestMessage(HttpMethod.Get, $"api/appointments?date={date}");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+            var response = await Http.SendAsync(request);
+            if (response.IsSuccessStatusCode)
+                _appointments = await response.Content.ReadFromJsonAsync<List<AppointmentDto>>() ?? [];
+        }
+        finally { _loading = false; }
+    }
+
+    async Task SetStatus(AppointmentDto appt, string status)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"api/appointments/{appt.Id}/status")
+        {
+            Content = JsonContent.Create(new { Status = status })
+        };
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+        var response = await Http.SendAsync(request);
+        if (response.IsSuccessStatusCode)
+        {
+            Snackbar.Add(status == "Confirmed" ? "Запись подтверждена" : "Запись отменена",
+                         status == "Confirmed" ? Severity.Success : Severity.Warning);
+            await LoadAsync();
+        }
+    }
+
+    static Color StatusColor(string status) => status switch
+    {
+        "Confirmed" => Color.Success,
+        "Cancelled" => Color.Error,
+        _           => Color.Warning
+    };
+
+    static string StatusLabel(string status) => status switch
+    {
+        "Confirmed" => "Подтверждено",
+        "Cancelled" => "Отменено",
+        _           => "Ожидание"
+    };
+
+    record AppointmentDto(
+        Guid Id, string ProcedureName, string ClientName, string ClientPhone,
+        DateTime ScheduledAt, int DurationMinutes, string Status);
+}
