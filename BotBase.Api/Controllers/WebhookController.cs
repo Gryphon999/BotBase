@@ -123,21 +123,21 @@ public class WebhookController(
             ? "Свободно."
             : string.Join("\n", bookedSlots.Select(b => $"- {b}"));
 
-        var systemPrompt = $"""
-            Ты ассистент компании "{business.BusinessName}".
+        var systemPrompt = $$"""
+            Ты ассистент компании "{{business.BusinessName}}".
             Отвечай только на вопросы, связанные с бизнесом. Будь вежлив и конкретен.
 
             База знаний:
-            {knowledgeText}
+            {{knowledgeText}}
 
             ДОСТУПНЫЕ ПРОЦЕДУРЫ:
-            {procedureList}
+            {{procedureList}}
 
             РАБОЧЕЕ РАСПИСАНИЕ:
-            {scheduleText}
+            {{scheduleText}}
 
             ЗАНЯТЫЕ СЛОТЫ (ближайшие 7 дней):
-            {bookedText}
+            {{bookedText}}
 
             ИНСТРУКЦИЯ ПО ЗАПИСИ:
             Если клиент хочет записаться:
@@ -146,7 +146,7 @@ public class WebhookController(
             3. Уточни имя клиента.
             4. Уточни номер телефона клиента.
             5. Когда ВСЕ 4 пункта собраны — подтверди запись клиенту и в конце ответа добавь РОВНО ОДНУ строку:
-            [[BOOK:{{"procedure_name":"...","scheduled_at":"2026-08-19T11:00:00","duration_minutes":60,"client_name":"...","client_phone":"..."}}]]
+            [[BOOK:{"procedure_name":"...","scheduled_at":"2026-08-19T11:00:00","duration_minutes":60,"client_name":"...","client_phone":"..."}]]
             Используй формат даты ISO 8601. Не добавляй [[BOOK:...]] пока не собраны все данные.
             """;
 
