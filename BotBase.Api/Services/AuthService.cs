@@ -45,7 +45,11 @@ public class AuthService(AppDbContext db, IConfiguration config)
         return BCrypt.Net.BCrypt.Verify(password, business.PasswordHash) ? business : null;
     }
 
-    public string GenerateJwt(Business business)
+    public string GenerateJwt(Business business) => BuildToken(business, DateTime.UtcNow.AddDays(30));
+
+    public string GenerateApiKey(Business business) => BuildToken(business, DateTime.UtcNow.AddYears(1));
+
+    private string BuildToken(Business business, DateTime expires)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -56,7 +60,7 @@ public class AuthService(AppDbContext db, IConfiguration config)
         };
         var token = new JwtSecurityToken(
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(30),
+            expires: expires,
             signingCredentials: creds);
         return new JwtSecurityTokenHandler().WriteToken(token);
     }

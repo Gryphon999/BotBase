@@ -15,7 +15,8 @@ namespace BotBase.Api.Controllers;
 public class WebhookController(
     AppDbContext db,
     TelegramService telegram,
-    AnthropicService anthropic) : ControllerBase
+    AnthropicService anthropic,
+    CrmWebhookService crmWebhook) : ControllerBase
 {
     [HttpPost("webhook/{businessId:guid}")]
     public async Task<IActionResult> Handle(Guid businessId, [FromBody] Update update)
@@ -197,7 +198,7 @@ public class WebhookController(
 
             if (!DateTime.TryParse(data.scheduled_at, out var scheduledAt)) return;
 
-            db.Appointments.Add(new Appointment
+            var appt = new Appointment
             {
                 Id              = Guid.NewGuid(),
                 BusinessId      = businessId,
@@ -210,8 +211,13 @@ public class WebhookController(
                                     : scheduledAt.ToUniversalTime(),
                 DurationMinutes = data.duration_minutes,
                 Status          = AppointmentStatus.Pending
-            });
+            };
+            db.Appointments.Add(appt);
             await db.SaveChangesAsync();
+
+            var business = await db.Businesses.FindAsync(businessId);
+            if (business?.CrmWebhookUrl is { } url)
+                await crmWebhook.FireAsync(url, "appointment.created", appt);
         }
         catch
         {

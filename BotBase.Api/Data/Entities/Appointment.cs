@@ -14,6 +14,7 @@ public class Appointment
     public int DurationMinutes { get; set; }
     public AppointmentStatus Status { get; set; } = AppointmentStatus.Pending;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public Business Business { get; set; } = null!;
 }
