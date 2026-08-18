@@ -52,12 +52,12 @@ else
                 @if (context.Status == "Pending")
                 {
                     <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small"
-                                   Title="Подтвердить" OnClick="() => SetStatus(context, "Confirmed")" />
+                                   Title="Подтвердить" OnClick="@(() => Confirm(context))" />
                 }
                 @if (context.Status != "Cancelled")
                 {
                     <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small"
-                                   Title="Отменить" OnClick="() => SetStatus(context, "Cancelled")" />
+                                   Title="Отменить" OnClick="@(() => Cancel(context))" />
                 }
             </MudTd>
         </RowTemplate>
@@ -90,6 +90,9 @@ else
         }
         finally { _loading = false; }
     }
+
+    Task Confirm(AppointmentDto appt) => SetStatus(appt, "Confirmed");
+    Task Cancel(AppointmentDto appt)  => SetStatus(appt, "Cancelled");
 
     async Task SetStatus(AppointmentDto appt, string status)
     {
