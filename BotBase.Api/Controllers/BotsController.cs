@@ -30,7 +30,7 @@ public class BotsController(AppDbContext db, TelegramService telegram, IConfigur
         business.BotToken = req.BotToken;
         await db.SaveChangesAsync();
 
-        return Ok(new BotStatusResponse(true, username, business.IsActive));
+        return Ok(new BotStatusResponse(true, username, business.IsActive, business.OwnerNotificationChatId.HasValue));
     }
 
     [HttpGet]
@@ -41,9 +41,21 @@ public class BotsController(AppDbContext db, TelegramService telegram, IConfigur
         if (business is null) return NotFound();
 
         if (business.BotToken is null)
-            return Ok(new BotStatusResponse(false, null, false));
+            return Ok(new BotStatusResponse(false, null, false, false));
 
         var username = await telegram.GetBotUsernameAsync(business.BotToken);
-        return Ok(new BotStatusResponse(true, username, business.IsActive));
+        return Ok(new BotStatusResponse(true, username, business.IsActive, business.OwnerNotificationChatId.HasValue));
+    }
+
+    [HttpDelete("owner-notification")]
+    public async Task<IActionResult> ResetOwnerNotification()
+    {
+        var businessId = User.GetBusinessId();
+        var business = await db.Businesses.FindAsync(businessId);
+        if (business is null) return NotFound();
+
+        business.OwnerNotificationChatId = null;
+        await db.SaveChangesAsync();
+        return NoContent();
     }
 }

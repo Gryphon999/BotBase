@@ -14,7 +14,10 @@ namespace BotBase.Api.Controllers;
 public class AppointmentsController(AppDbContext db, CrmWebhookService webhook) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] DateTime? date, [FromQuery] DateTime? updatedSince)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] DateTime? date,
+        [FromQuery] DateTime? updatedSince,
+        [FromQuery] string? month)
     {
         var businessId = User.GetBusinessId();
         var query = db.Appointments.Where(a => a.BusinessId == businessId);
@@ -31,6 +34,13 @@ public class AppointmentsController(AppDbContext db, CrmWebhookService webhook) 
                 ? updatedSince.Value
                 : updatedSince.Value.ToUniversalTime();
             query = query.Where(a => a.UpdatedAt >= since);
+        }
+
+        if (month is not null && DateTime.TryParseExact(month, "yyyy-MM",
+                null, System.Globalization.DateTimeStyles.None, out var monthStart))
+        {
+            var monthEnd = monthStart.AddMonths(1);
+            query = query.Where(a => a.ScheduledAt >= monthStart && a.ScheduledAt < monthEnd);
         }
 
         var list = await query

@@ -7,88 +7,180 @@
 
 <PageTitle>Записи — BotBase</PageTitle>
 
-<MudText Typo="Typo.h5" Class="mb-4">Записи клиентов</MudText>
-
-<MudPaper Class="pa-4 mb-4" Elevation="1">
-    <MudDatePicker Label="Дата" @bind-Date="_selectedDate" DateFormat="dd.MM.yyyy"
-                   Editable="true" Class="mb-2" Style="max-width:220px" />
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync" Size="Size.Small">
-        Показать
-    </MudButton>
-</MudPaper>
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5">Записи клиентов</MudText>
+    <div class="d-flex align-center gap-2">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="PrevMonth" />
+        <MudText Typo="Typo.h6" Style="min-width:180px;text-align:center">@_currentMonth.ToString("MMMM yyyy")</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="NextMonth" />
+    </div>
+</div>
 
 @if (_loading)
 {
-    <MudProgressLinear Indeterminate="true" />
+    <MudProgressLinear Indeterminate="true" Class="mb-4" />
 }
-else if (_appointments.Count == 0)
-{
-    <MudAlert Severity="Severity.Info">На выбранную дату записей нет.</MudAlert>
-}
-else
-{
-    <MudTable Items="_appointments" Hover="true" Striped="true" Dense="true">
-        <HeaderContent>
-            <MudTh>Время</MudTh>
-            <MudTh>Процедура</MudTh>
-            <MudTh>Клиент</MudTh>
-            <MudTh>Телефон</MudTh>
-            <MudTh>Длит.</MudTh>
-            <MudTh>Статус</MudTh>
-            <MudTh>Действия</MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd>@context.ScheduledAt.ToLocalTime().ToString("HH:mm")</MudTd>
-            <MudTd>@context.ProcedureName</MudTd>
-            <MudTd>@context.ClientName</MudTd>
-            <MudTd>@context.ClientPhone</MudTd>
-            <MudTd>@context.DurationMinutes мин</MudTd>
-            <MudTd>
-                <MudChip T="string" Color="@StatusColor(context.Status)" Size="Size.Small">
-                    @StatusLabel(context.Status)
-                </MudChip>
-            </MudTd>
-            <MudTd>
-                @if (context.Status == "Pending")
+
+@* Day headers *@
+<MudGrid Spacing="1" Class="mb-1">
+    @foreach (var day in new[] { "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс" })
+    {
+        <MudItem xs="@(12 / 7)" Style="text-align:center">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@day</MudText>
+        </MudItem>
+    }
+</MudGrid>
+
+@* Calendar grid *@
+<MudGrid Spacing="1">
+    @* Empty cells before month start *@
+    @for (int i = 0; i < StartOffset; i++)
+    {
+        <MudItem xs="@(12 / 7)">
+            <MudPaper Class="pa-2" Style="min-height:64px;opacity:0.3" Elevation="0" />
+        </MudItem>
+    }
+
+    @* Day cells *@
+    @for (int d = 1; d <= DaysInMonth; d++)
+    {
+        var date = new DateTime(_currentMonth.Year, _currentMonth.Month, d);
+        var count = AppointmentCountFor(date);
+        var isSelected = _selectedDate?.Date == date.Date;
+        var isToday = date.Date == DateTime.Today;
+        var cellDate = date;
+
+        <MudItem xs="@(12 / 7)">
+            <MudPaper Class="pa-2 cursor-pointer"
+                      Style="@($"min-height:64px;{(isSelected ? "border:2px solid var(--mud-palette-primary);" : "")}{(isToday ? "background:var(--mud-palette-primary-lighten);" : "")}")"
+                      Elevation="@(isSelected ? 4 : 1)"
+                      @onclick="() => SelectDate(cellDate)">
+                <MudText Typo="Typo.body2" Color="@(isToday ? Color.Primary : Color.Default)">
+                    <strong>@d</strong>
+                </MudText>
+                @if (count > 0)
                 {
-                    <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small"
-                                   Title="Подтвердить" OnClick="@(() => Confirm(context))" />
+                    <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mt-1">
+                        @count зап.
+                    </MudChip>
                 }
-                @if (context.Status != "Cancelled")
-                {
-                    <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small"
-                                   Title="Отменить" OnClick="@(() => Cancel(context))" />
-                }
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@* Expanded day panel *@
+@if (_selectedDate.HasValue)
+{
+    var dayAppts = AppointmentsFor(_selectedDate.Value);
+    <MudPaper Class="pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3">
+            @_selectedDate.Value.ToString("d MMMM yyyy")
+            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ml-2">@dayAppts.Count записей</MudChip>
+        </MudText>
+
+        @if (dayAppts.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">На этот день записей нет.</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="dayAppts" Hover="true" Dense="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>Время</MudTh>
+                    <MudTh>Процедура</MudTh>
+                    <MudTh>Клиент</MudTh>
+                    <MudTh>Телефон</MudTh>
+                    <MudTh>Длит.</MudTh>
+                    <MudTh>Статус</MudTh>
+                    <MudTh>Действия</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.ScheduledAt.ToLocalTime().ToString("HH:mm")</MudTd>
+                    <MudTd>@context.ProcedureName</MudTd>
+                    <MudTd>@context.ClientName</MudTd>
+                    <MudTd>@context.ClientPhone</MudTd>
+                    <MudTd>@context.DurationMinutes мин</MudTd>
+                    <MudTd>
+                        <MudChip T="string" Color="@StatusColor(context.Status)" Size="Size.Small">
+                            @StatusLabel(context.Status)
+                        </MudChip>
+                    </MudTd>
+                    <MudTd>
+                        @if (context.Status == "Pending")
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"
+                                           Size="Size.Small" OnClick="@(() => Confirm(context))" />
+                        }
+                        @if (context.Status != "Cancelled")
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"
+                                           Size="Size.Small" OnClick="@(() => Cancel(context))" />
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
 }
 
 @code {
-    DateTime? _selectedDate = DateTime.Today;
+    DateTime _currentMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    DateTime? _selectedDate;
     bool _loading;
-    List<AppointmentDto> _appointments = [];
+    List<AppointmentDto> _monthAppointments = [];
     string? _token;
+
+    int StartOffset => ((int)_currentMonth.DayOfWeek + 6) % 7; // Mon=0, Sun=6
+    int DaysInMonth => DateTime.DaysInMonth(_currentMonth.Year, _currentMonth.Month);
+
+    int AppointmentCountFor(DateTime date) =>
+        _monthAppointments.Count(a => a.ScheduledAt.ToLocalTime().Date == date.Date);
+
+    List<AppointmentDto> AppointmentsFor(DateTime date) =>
+        _monthAppointments
+            .Where(a => a.ScheduledAt.ToLocalTime().Date == date.Date)
+            .OrderBy(a => a.ScheduledAt)
+            .ToList();
 
     protected override async Task OnInitializedAsync()
     {
         _token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
-        await LoadAsync();
+        await LoadMonthAsync();
     }
 
-    async Task LoadAsync()
+    async Task LoadMonthAsync()
     {
         _loading = true;
         try
         {
-            var date = (_selectedDate ?? DateTime.Today).ToString("yyyy-MM-dd");
-            var request = new HttpRequestMessage(HttpMethod.Get, $"api/appointments?date={date}");
+            var monthParam = _currentMonth.ToString("yyyy-MM");
+            var request = new HttpRequestMessage(HttpMethod.Get, $"api/appointments?month={monthParam}");
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
             var response = await Http.SendAsync(request);
             if (response.IsSuccessStatusCode)
-                _appointments = await response.Content.ReadFromJsonAsync<List<AppointmentDto>>() ?? [];
+                _monthAppointments = await response.Content.ReadFromJsonAsync<List<AppointmentDto>>() ?? [];
         }
         finally { _loading = false; }
+    }
+
+    void SelectDate(DateTime date)
+    {
+        _selectedDate = _selectedDate?.Date == date.Date ? null : date;
+    }
+
+    async Task PrevMonth()
+    {
+        _currentMonth = _currentMonth.AddMonths(-1);
+        _selectedDate = null;
+        await LoadMonthAsync();
+    }
+
+    async Task NextMonth()
+    {
+        _currentMonth = _currentMonth.AddMonths(1);
+        _selectedDate = null;
+        await LoadMonthAsync();
     }
 
     Task Confirm(AppointmentDto appt) => SetStatus(appt, "Confirmed");
@@ -106,7 +198,7 @@ else
         {
             Snackbar.Add(status == "Confirmed" ? "Запись подтверждена" : "Запись отменена",
                          status == "Confirmed" ? Severity.Success : Severity.Warning);
-            await LoadAsync();
+            await LoadMonthAsync();
         }
     }
 
@@ -126,5 +218,6 @@ else
 
     record AppointmentDto(
         Guid Id, string ProcedureName, string ClientName, string ClientPhone,
-        DateTime ScheduledAt, int DurationMinutes, string Status);
+        DateTime ScheduledAt, int DurationMinutes, string Status,
+        DateTime CreatedAt, DateTime UpdatedAt);
 }

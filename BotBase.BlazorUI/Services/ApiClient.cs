@@ -24,6 +24,9 @@ public class ApiClient(HttpClient http)
     public Task<HttpResponseMessage> GetBotStatusAsync() =>
         http.GetAsync("api/bots");
 
+    public Task<HttpResponseMessage> ResetOwnerNotificationAsync() =>
+        http.DeleteAsync("api/bots/owner-notification");
+
     public Task<HttpResponseMessage> GetKnowledgeAsync() =>
         http.GetAsync("api/knowledge");
 

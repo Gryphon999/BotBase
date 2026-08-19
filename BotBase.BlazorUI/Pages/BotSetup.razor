@@ -2,10 +2,12 @@
 @inject ApiClient Api
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@using System.Net.Http.Json
 
 <MudText Typo="Typo.h4" Class="mb-4">Настройка бота</MudText>
 
-<MudPaper Class="pa-6" MaxWidth="600px">
+<MudPaper Class="pa-6 mb-6" MaxWidth="600px">
+    <MudText Typo="Typo.h6" Class="mb-3">Токен бота</MudText>
     <MudText Typo="Typo.body1" Class="mb-4">
         Создайте бота через <strong>@BotFather</strong> в Telegram и вставьте токен ниже.
         Мы автоматически зарегистрируем webhook — ваш бот начнёт принимать сообщения сразу после сохранения.
@@ -27,16 +29,56 @@
     </MudButton>
 </MudPaper>
 
+<MudPaper Class="pa-6" MaxWidth="600px">
+    <MudText Typo="Typo.h6" Class="mb-3">Уведомления владельца</MudText>
+
+    @if (_ownerConnected)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-4">
+            ✅ Вы подключены — уведомления о новых записях приходят вам в Telegram.
+        </MudAlert>
+        <MudButton Variant="Variant.Outlined" Color="Color.Error"
+                   OnClick="ResetOwnerNotification" Disabled="_resetting">
+            @(_resetting ? "Сбрасываем..." : "Сбросить подключение")
+        </MudButton>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            Уведомления не настроены. Откройте своего бота в Telegram и отправьте <strong>/start</strong> —
+            бот автоматически запомнит вас как владельца.
+        </MudAlert>
+    }
+    @if (_resetSuccess)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-3">Подключение сброшено. Отправьте /start боту, чтобы подключиться снова.</MudAlert>
+    }
+</MudPaper>
+
 @code {
     string _token = "";
     string? _error;
     bool _success, _loading;
+    bool _ownerConnected, _resetting, _resetSuccess;
 
     protected override async Task OnInitializedAsync()
     {
         var token = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
         if (token is null) { Nav.NavigateTo("/login"); return; }
         Api.SetToken(token);
+        await LoadStatusAsync();
+    }
+
+    async Task LoadStatusAsync()
+    {
+        var resp = await Api.GetBotStatusAsync();
+        if (resp.IsSuccessStatusCode)
+        {
+            var status = await resp.Content.ReadFromJsonAsync<BotStatusDto>();
+            _ownerConnected = status?.OwnerConnected ?? false;
+            if (status?.BotUsername is { } username)
+                _token = "";
+        }
     }
 
     async Task Save()
@@ -46,11 +88,29 @@
         _success = false;
         var resp = await Api.SetupBotAsync(_token.Trim());
         if (resp.IsSuccessStatusCode)
+        {
             _success = true;
+            await LoadStatusAsync();
+        }
         else
             _error = "Не удалось подключить бота. Проверьте токен и попробуйте снова.";
         _loading = false;
     }
 
+    async Task ResetOwnerNotification()
+    {
+        _resetting = true;
+        _resetSuccess = false;
+        var resp = await Api.ResetOwnerNotificationAsync();
+        if (resp.IsSuccessStatusCode)
+        {
+            _ownerConnected = false;
+            _resetSuccess = true;
+        }
+        _resetting = false;
+    }
+
     const string BotFather = "@BotFather";
+
+    record BotStatusDto(bool HasBot, string? BotUsername, bool IsActive, bool OwnerConnected);
 }

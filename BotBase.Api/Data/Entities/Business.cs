@@ -8,6 +8,7 @@ public class Business
     public string BusinessName { get; set; } = "";
     public string? BotToken { get; set; }
     public string? CrmWebhookUrl { get; set; }
+    public long? OwnerNotificationChatId { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
