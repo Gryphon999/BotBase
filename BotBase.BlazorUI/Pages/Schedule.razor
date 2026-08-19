@@ -3,7 +3,11 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<MudText Typo="Typo.h4" Class="mb-4">Рабочее расписание</MudText>
+<MudText Typo="Typo.h4" Class="mb-2">Рабочее расписание</MudText>
+<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-5">
+    Укажите рабочие дни и часы вашего бизнеса. Бот не запишет клиента на выходной день
+    или за пределами указанного времени работы.
+</MudText>
 
 @if (_rows is null)
 {

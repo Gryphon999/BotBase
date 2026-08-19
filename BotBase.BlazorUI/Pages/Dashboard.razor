@@ -3,7 +3,10 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<MudText Typo="Typo.h4" Class="mb-4">Панель управления</MudText>
+<MudText Typo="Typo.h4" Class="mb-2">Панель управления</MudText>
+<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-5">
+    Общий обзор состояния вашего бота. Здесь вы видите статус подключения и быстрые ссылки на основные разделы.
+</MudText>
 
 @if (_status is null)
 {

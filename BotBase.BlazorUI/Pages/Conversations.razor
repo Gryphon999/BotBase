@@ -3,7 +3,10 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<MudText Typo="Typo.h4" Class="mb-4">Разговоры</MudText>
+<MudText Typo="Typo.h4" Class="mb-2">Разговоры</MudText>
+<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-5">
+    История всех диалогов клиентов с вашим ботом. Кликните на строку, чтобы открыть полную переписку.
+</MudText>
 
 @if (_conversations is null)
 {

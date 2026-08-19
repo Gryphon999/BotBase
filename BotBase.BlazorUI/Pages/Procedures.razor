@@ -3,7 +3,11 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<MudText Typo="Typo.h4" Class="mb-4">Процедуры</MudText>
+<MudText Typo="Typo.h4" Class="mb-2">Процедуры</MudText>
+<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-5">
+    Список услуг вашего бизнеса. Бот предлагает клиентам только эти процедуры при записи
+    и учитывает их длительность, чтобы записи не накладывались друг на друга.
+</MudText>
 
 @if (_procedures is null)
 {
