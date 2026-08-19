@@ -25,42 +25,38 @@
     <MudProgressLinear Indeterminate="true" Class="mb-4" />
 }
 
-@* Day headers *@
-<MudGrid Spacing="1" Class="mb-1">
+@* Day headers — CSS grid, exactly 7 columns *@
+<div style="display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:4px;">
     @foreach (var day in new[] { "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс" })
     {
-        <MudItem xs="@(12 / 7)" Style="text-align:center">
+        <div style="text-align:center; padding:4px 0;">
             <MudText Typo="Typo.caption" Color="Color.Secondary">@day</MudText>
-        </MudItem>
+        </div>
     }
-</MudGrid>
+</div>
 
-@* Calendar grid *@
-<MudGrid Spacing="1">
-    @* Empty cells before month start *@
-    @for (int i = 0; i < StartOffset; i++)
+@* Calendar grid — foreach avoids Blazor @for loop-variable capture bug *@
+<div style="display:grid; grid-template-columns:repeat(7,1fr); gap:4px;">
+    @foreach (var cell in CalendarCells())
     {
-        <MudItem xs="@(12 / 7)">
-            <MudPaper Class="pa-2" Style="min-height:64px;opacity:0.3" Elevation="0" />
-        </MudItem>
-    }
+        if (cell is null)
+        {
+            <div style="min-height:64px;"></div>
+        }
+        else
+        {
+            var day = cell.Value;
+            var date = new DateTime(_currentMonth.Year, _currentMonth.Month, day);
+            var count = AppointmentCountFor(date);
+            var isSelected = _selectedDate?.Date == date.Date;
+            var isToday = date.Date == DateTime.Today;
+            var cellDate = date;
 
-    @* Day cells *@
-    @for (int d = 1; d <= DaysInMonth; d++)
-    {
-        var date = new DateTime(_currentMonth.Year, _currentMonth.Month, d);
-        var count = AppointmentCountFor(date);
-        var isSelected = _selectedDate?.Date == date.Date;
-        var isToday = date.Date == DateTime.Today;
-        var cellDate = date;
-
-        <MudItem xs="@(12 / 7)">
-            <MudPaper Class="pa-2 cursor-pointer"
-                      Style="@($"min-height:64px;{(isSelected ? "border:2px solid var(--mud-palette-primary);" : "")}{(isToday ? "background:var(--mud-palette-primary-lighten);" : "")}")"
+            <MudPaper Class="pa-2" Style="@($"min-height:64px;cursor:pointer;{(isSelected ? "border:2px solid var(--mud-palette-primary);" : "")}{(isToday ? "background:var(--mud-palette-primary-lighten);" : "")}")"
                       Elevation="@(isSelected ? 4 : 1)"
                       @onclick="() => SelectDate(cellDate)">
                 <MudText Typo="Typo.body2" Color="@(isToday ? Color.Primary : Color.Default)">
-                    <strong>@d</strong>
+                    <strong>@day</strong>
                 </MudText>
                 @if (count > 0)
                 {
@@ -69,9 +65,9 @@
                     </MudChip>
                 }
             </MudPaper>
-        </MudItem>
+        }
     }
-</MudGrid>
+</div>
 
 @* Expanded day panel *@
 @if (_selectedDate.HasValue)
@@ -137,6 +133,13 @@
 
     int StartOffset => ((int)_currentMonth.DayOfWeek + 6) % 7; // Mon=0, Sun=6
     int DaysInMonth => DateTime.DaysInMonth(_currentMonth.Year, _currentMonth.Month);
+
+    // Returns null for empty leading cells, day number for actual days
+    IEnumerable<int?> CalendarCells()
+    {
+        for (int i = 0; i < StartOffset; i++) yield return null;
+        for (int d = 1; d <= DaysInMonth; d++) yield return d;
+    }
 
     int AppointmentCountFor(DateTime date) =>
         _monthAppointments.Count(a => a.ScheduledAt.ToLocalTime().Date == date.Date);
