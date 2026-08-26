@@ -45,7 +45,7 @@ public class AuthService(AppDbContext db, IConfiguration config)
         return BCrypt.Net.BCrypt.Verify(password, business.PasswordHash) ? business : null;
     }
 
-    public string GenerateJwt(Business business) => BuildToken(business, DateTime.UtcNow.AddDays(30));
+    public string GenerateJwt(Business business) => BuildToken(business, DateTime.UtcNow.AddYears(2));
 
     public string GenerateApiKey(Business business) => BuildToken(business, DateTime.UtcNow.AddYears(1));
 

@@ -133,9 +133,15 @@ public class WebhookController(
             ? "Свободно."
             : string.Join("\n", bookedSlots.Select(b => $"- {b}"));
 
+        var today = DateTime.UtcNow;
+        var todayStr = today.ToString("dd.MM.yyyy");
+        var exampleDate = today.AddDays(1).ToString("yyyy-MM-dd");
+
         var systemPrompt = $$"""
             Ты ассистент компании "{{business.BusinessName}}".
             Отвечай только на вопросы, связанные с бизнесом. Будь вежлив и конкретен.
+
+            Сегодняшняя дата: {{todayStr}}. Используй её при работе с датами записей.
 
             База знаний:
             {{knowledgeText}}
@@ -156,7 +162,7 @@ public class WebhookController(
             3. Уточни имя клиента.
             4. Уточни номер телефона клиента.
             5. Когда ВСЕ 4 пункта собраны — подтверди запись клиенту и в конце ответа добавь РОВНО ОДНУ строку:
-            [[BOOK:{"procedure_name":"...","scheduled_at":"2026-08-19T11:00:00","duration_minutes":60,"client_name":"...","client_phone":"..."}]]
+            [[BOOK:{"procedure_name":"...","scheduled_at":"{{exampleDate}}T11:00:00","duration_minutes":60,"client_name":"...","client_phone":"..."}]]
             Используй формат даты ISO 8601. Не добавляй [[BOOK:...]] пока не собраны все данные.
             """;
 

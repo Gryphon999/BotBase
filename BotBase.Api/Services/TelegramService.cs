@@ -6,10 +6,18 @@ public class TelegramService(IHttpClientFactory httpFactory)
 {
     public async Task<string?> GetBotUsernameAsync(string token)
     {
-        var client = httpFactory.CreateClient();
-        var resp = await client.GetFromJsonAsync<TelegramMeResponse>(
-            $"https://api.telegram.org/bot{token}/getMe");
-        return resp?.Ok == true ? resp.Result?.Username : null;
+        try
+        {
+            var client = httpFactory.CreateClient();
+            using var response = await client.GetAsync($"https://api.telegram.org/bot{token}/getMe");
+            if (!response.IsSuccessStatusCode) return null;
+            var resp = await response.Content.ReadFromJsonAsync<TelegramMeResponse>();
+            return resp?.Ok == true ? resp.Result?.Username : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<bool> SetWebhookAsync(string token, string webhookUrl)

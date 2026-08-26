@@ -96,6 +96,11 @@
             _success = true;
             await LoadStatusAsync();
         }
+        else if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+            Nav.NavigateTo("/login");
+        }
         else
             _error = "Не удалось подключить бота. Проверьте токен и попробуйте снова.";
         _loading = false;
