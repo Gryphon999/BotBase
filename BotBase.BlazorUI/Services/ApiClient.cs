@@ -64,4 +64,13 @@ public class ApiClient(HttpClient http)
 
     public Task<HttpResponseMessage> SaveScheduleAsync(object rows) =>
         http.PutAsJsonAsync("api/schedule", rows);
+
+    public Task<HttpResponseMessage> GetApiKeyAsync() =>
+        http.GetAsync("api/integration/apikey");
+
+    public Task<HttpResponseMessage> GetWebhookAsync() =>
+        http.GetAsync("api/integration/webhook");
+
+    public Task<HttpResponseMessage> SetWebhookAsync(string? url) =>
+        http.PutAsJsonAsync("api/integration/webhook", new { url });
 }

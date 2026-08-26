@@ -1,0 +1,142 @@
+@page "/integration"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@using System.Net.Http.Json
+
+<MudText Typo="Typo.h4" Class="mb-2">Интеграция</MudText>
+<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-5">
+    Подключите стороннюю CRM-систему. Скопируйте API-ключ и передайте его вашей CRM,
+    затем укажите URL вебхука — BotBase будет отправлять туда данные о каждой новой записи.
+</MudText>
+
+<MudPaper Class="pa-6 mb-6" MaxWidth="600px">
+    <MudText Typo="Typo.h6" Class="mb-1">API-ключ</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        Передайте этот ключ в вашу CRM. Она использует его в заголовке
+        <code>Authorization: Bearer &lt;ключ&gt;</code> при обращении к BotBase API.
+    </MudText>
+
+    @if (_apiKey is null && !_keyLoading)
+    {
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="LoadApiKey">
+            Показать API-ключ
+        </MudButton>
+    }
+    else if (_keyLoading)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        <MudTextField Value="_apiKey"
+                      Label="API-ключ"
+                      Variant="Variant.Outlined"
+                      ReadOnly="true"
+                      Class="mb-3"
+                      Adornment="Adornment.End"
+                      AdornmentIcon="@Icons.Material.Filled.ContentCopy"
+                      OnAdornmentClick="CopyKey" />
+        @if (_keyCopied)
+        {
+            <MudAlert Severity="Severity.Success" Dense="true" Class="mb-2">Скопировано!</MudAlert>
+        }
+    }
+</MudPaper>
+
+<MudPaper Class="pa-6" MaxWidth="600px">
+    <MudText Typo="Typo.h6" Class="mb-1">Webhook URL</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        BotBase будет POST'ить сюда события о записях в формате
+        <code>@("{\"event\":\"appointment.created\",\"appointment\":{...}}")</code>.
+        Оставьте пустым, чтобы отключить.
+    </MudText>
+
+    <MudTextField @bind-Value="_webhookUrl"
+                  Label="https://ваша-crm.com/api/botbase/webhook"
+                  Variant="Variant.Outlined"
+                  Class="mb-4" />
+
+    @if (_webhookError is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@_webhookError</MudAlert>
+    }
+    @if (_webhookSaved)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-4">Webhook сохранён!</MudAlert>
+    }
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveWebhook" Disabled="_webhookLoading">
+        @(_webhookLoading ? "Сохраняем..." : "Сохранить")
+    </MudButton>
+</MudPaper>
+
+@code {
+    string? _apiKey;
+    bool _keyLoading;
+    bool _keyCopied;
+
+    string? _webhookUrl;
+    bool _webhookLoading;
+    bool _webhookSaved;
+    string? _webhookError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var jwt = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
+        if (string.IsNullOrEmpty(jwt)) { Nav.NavigateTo("/login"); return; }
+        Api.SetToken(jwt);
+
+        var resp = await Api.GetWebhookAsync();
+        if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+            Nav.NavigateTo("/login");
+            return;
+        }
+        if (resp.IsSuccessStatusCode)
+        {
+            var data = await resp.Content.ReadFromJsonAsync<WebhookResponse>();
+            _webhookUrl = data?.WebhookUrl;
+        }
+    }
+
+    async Task LoadApiKey()
+    {
+        _keyLoading = true;
+        var resp = await Api.GetApiKeyAsync();
+        if (resp.IsSuccessStatusCode)
+        {
+            var data = await resp.Content.ReadFromJsonAsync<ApiKeyResponse>();
+            _apiKey = data?.ApiKey;
+        }
+        _keyLoading = false;
+    }
+
+    async Task CopyKey()
+    {
+        if (_apiKey is null) return;
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", _apiKey);
+        _keyCopied = true;
+        await Task.Delay(2000);
+        _keyCopied = false;
+    }
+
+    async Task SaveWebhook()
+    {
+        _webhookLoading = true;
+        _webhookError = null;
+        _webhookSaved = false;
+
+        var resp = await Api.SetWebhookAsync(_webhookUrl);
+        if (resp.IsSuccessStatusCode)
+            _webhookSaved = true;
+        else
+            _webhookError = "Не удалось сохранить. Попробуйте ещё раз.";
+
+        _webhookLoading = false;
+    }
+
+    record WebhookResponse(string? WebhookUrl);
+    record ApiKeyResponse(string ApiKey);
+}
