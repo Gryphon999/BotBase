@@ -1,12 +1,17 @@
 using BotBase.Api.Data;
 using BotBase.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var port = Environment.GetEnvironmentVariable("PORT");
+if (port is not null)
+    builder.WebHost.UseUrls($"http://*:{port}");
 
 var connectionString = GetConnectionString();
 builder.Services.AddDbContext<AppDbContext>(opt =>
@@ -17,14 +22,25 @@ static string GetConnectionString()
 {
     var url = Environment.GetEnvironmentVariable("DATABASE_URL")
               ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
-    if (url is not null && url.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+    if (url is not null && (url.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) ||
+                             url.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase)))
     {
         var uri = new Uri(url);
-        var userInfo = uri.UserInfo.Split(':');
+        var userInfo = uri.UserInfo.Split(':', 2);
         return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
     }
     return url ?? throw new InvalidOperationException("Connection string not configured");
 }
+
+builder.Services.Configure<HostOptions>(opt =>
+    opt.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
+
+builder.Services.Configure<ForwardedHeadersOptions>(opt =>
+{
+    opt.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    opt.KnownNetworks.Clear();
+    opt.KnownProxies.Clear();
+});
 
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
@@ -61,11 +77,13 @@ using (var scope = app.Services.CreateScope())
     await db.Database.MigrateAsync();
 }
 
+app.UseForwardedHeaders();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapMethods("/health", new[] { "GET", "HEAD" }, () => Results.Ok());
 app.MapFallbackToFile("index.html");
 
 app.Run();
