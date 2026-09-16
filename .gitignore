@@ -4,3 +4,4 @@ obj/
 .vs/
 *.suo
 appsettings.Development.json
+backups/*.sql.gz
