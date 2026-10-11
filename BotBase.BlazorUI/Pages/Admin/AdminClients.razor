@@ -1,0 +1,178 @@
+@page "/admin"
+@layout AdminLayout
+@inherits AdminPage
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>Клиенты · Админка BotBase</PageTitle>
+
+<PageHeader Title="Клиенты платформы" Description="Все подключённые бизнесы, их боты и активность. Управление аккаунтами и быстрый вход в кабинет клиента.">
+    <Actions>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Refresh" OnClick="Load">Обновить</MudButton>
+    </Actions>
+</PageHeader>
+
+@if (_stats is not null)
+{
+    <MudGrid Spacing="4" Class="mb-4">
+        <MudItem xs="12" sm="6" lg="3"><StatCard Label="Клиентов" Value="@_stats.Businesses.ToString()" Hint="@($"активны: {_stats.ActiveBusinesses}")" Icon="@Icons.Material.Rounded.Groups" Color="#6D5DFC" /></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><StatCard Label="Подключено ботов" Value="@_stats.ConnectedBots.ToString()" Icon="@Icons.Material.Rounded.SmartToy" Color="#3B82F6" /></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><StatCard Label="Записей за неделю" Value="@_stats.AppointmentsWeek.ToString()" Hint="@($"всего: {_stats.Appointments}")" Icon="@Icons.Material.Rounded.EventAvailable" Color="#10B981" /></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><StatCard Label="Открытых обращений" Value="@_stats.OpenTickets.ToString()" Hint="@($"сообщений ботам за неделю: {_stats.MessagesWeek}")" Icon="@Icons.Material.Rounded.SupportAgent" Color="#F59E0B" /></MudItem>
+    </MudGrid>
+}
+
+<MudTable Items="Filtered" Hover="true" Loading="_businesses is null" LoadingProgressColor="Color.Primary" Breakpoint="Breakpoint.Sm">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Список клиентов</MudText>
+        <MudSpacer />
+        <MudTextField @bind-Value="_search" Placeholder="Поиск по названию или email" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:320px" />
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Бизнес</MudTh>
+        <MudTh>Статус</MudTh>
+        <MudTh>Бот</MudTh>
+        <MudTh>Наполнение</MudTh>
+        <MudTh>Активность</MudTh>
+        <MudTh Style="text-align:right">Действия</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Бизнес">
+            <div style="font-weight:700">@context.BusinessName</div>
+            <div class="bb-sub" style="font-size:.82rem">@context.Email</div>
+            <div class="bb-sub" style="font-size:.75rem">с @context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")</div>
+        </MudTd>
+        <MudTd DataLabel="Статус">
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@(context.IsActive ? Color.Success : Color.Error)">@(context.IsActive ? "Активен" : "Отключён")</MudChip>
+            @if (context.OpenTickets > 0)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" Href="/admin/support">Обращений: @context.OpenTickets</MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="Бот">
+            @if (context.HasBot)
+            {
+                <span style="font-weight:600">Подключён</span>
+                <div class="bb-sub" style="font-size:.78rem">@(context.OwnerConnected ? "уведомления включены" : "без уведомлений")</div>
+            }
+            else
+            {
+                <span class="bb-sub">Не подключён</span>
+            }
+        </MudTd>
+        <MudTd DataLabel="Наполнение">
+            <div style="font-size:.85rem">Процедур: <b>@context.Procedures</b> · Файлов: <b>@context.KnowledgeFiles</b></div>
+            <div style="font-size:.85rem">Записей: <b>@context.Appointments</b> · Диалогов: <b>@context.Conversations</b></div>
+        </MudTd>
+        <MudTd DataLabel="Активность">
+            @(context.LastMessageAt is { } d ? d.ToLocalTime().ToString("dd.MM.yyyy HH:mm") : "—")
+        </MudTd>
+        <MudTd Style="text-align:right">
+            <MudTooltip Text="Войти в кабинет клиента">
+                <MudIconButton Icon="@Icons.Material.Rounded.Login" Color="Color.Primary" OnClick="() => Impersonate(context)" />
+            </MudTooltip>
+            <MudMenu Icon="@Icons.Material.Rounded.MoreVert" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                <MudMenuItem Icon="@Icons.Material.Rounded.HealthAndSafety" OnClick="() => CheckBot(context)" Disabled="!context.HasBot">Проверить бота</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Rounded.RestartAlt" OnClick="() => RestartBot(context)" Disabled="!context.HasBot">Перезапустить бота</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Rounded.Login" OnClick="() => Impersonate(context)">Войти как клиент</MudMenuItem>
+                <MudDivider />
+                @if (context.IsActive)
+                {
+                    <MudMenuItem Icon="@Icons.Material.Rounded.Block" OnClick="() => SetActive(context, false)">Отключить</MudMenuItem>
+                }
+                else
+                {
+                    <MudMenuItem Icon="@Icons.Material.Rounded.CheckCircle" OnClick="() => SetActive(context, true)">Включить</MudMenuItem>
+                }
+                <MudMenuItem Icon="@Icons.Material.Rounded.DeleteForever" IconColor="Color.Error" OnClick="() => Delete(context)">Удалить навсегда</MudMenuItem>
+            </MudMenu>
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText Class="bb-sub pa-6">Клиентов пока нет</MudText>
+    </NoRecordsContent>
+</MudTable>
+
+@code {
+    List<BusinessDto>? _businesses;
+    StatsDto? _stats;
+    string _search = "";
+
+    IEnumerable<BusinessDto> Filtered => (_businesses ?? []).Where(b => string.IsNullOrWhiteSpace(_search)
+        || b.BusinessName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || b.Email.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (await EnsureAdminAsync()) await Load();
+    }
+
+    async Task Load()
+    {
+        var resp = await Api.AdminBusinessesAsync();
+        if (!await CheckAuthAsync(resp)) return;
+        _businesses = await resp.Content.ReadFromJsonAsync<List<BusinessDto>>();
+        _stats = await (await Api.AdminStatsAsync()).Content.ReadFromJsonAsync<StatsDto>();
+    }
+
+    async Task CheckBot(BusinessDto b)
+    {
+        var info = await (await Api.AdminBotInfoAsync(b.Id)).Content.ReadFromJsonAsync<BotInfoDto>();
+        if (info is null) return;
+        var text = !info.TokenValid
+            ? "Токен недействителен — клиенту нужно подключить бота заново."
+            : $"@{info.Username}\nWebhook: {(string.IsNullOrEmpty(info.WebhookUrl) ? "не установлен" : info.WebhookUrl)}\nВ очереди: {info.Pending}\nПоследняя ошибка: {info.LastError ?? "нет"}";
+        await Dialogs.ShowMessageBoxAsync($"Бот клиента «{b.BusinessName}»", text, yesText: "Закрыть");
+    }
+
+    async Task RestartBot(BusinessDto b)
+    {
+        var resp = await Api.AdminRestartBotAsync(b.Id);
+        if (resp.IsSuccessStatusCode)
+            Snackbar.Add($"Бот «{b.BusinessName}» перезапущен: webhook зарегистрирован заново", Severity.Success);
+        else
+            Snackbar.Add((await resp.Content.ReadFromJsonAsync<ErrorDto>())?.Error ?? "Не удалось перезапустить", Severity.Error);
+    }
+
+    async Task SetActive(BusinessDto b, bool active)
+    {
+        if (!active)
+        {
+            var ok = await Dialogs.ShowMessageBoxAsync("Отключить клиента?",
+                $"Бот «{b.BusinessName}» перестанет отвечать, а вход в кабинет будет закрыт. Данные сохранятся, включить можно в любой момент.",
+                yesText: "Отключить", cancelText: "Отмена");
+            if (ok != true) return;
+        }
+        var resp = await Api.AdminSetActiveAsync(b.Id, active);
+        Snackbar.Add(resp.IsSuccessStatusCode ? (active ? "Клиент включён" : "Клиент отключён") : "Ошибка", resp.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+        await Load();
+    }
+
+    async Task Impersonate(BusinessDto b)
+    {
+        var resp = await Api.AdminImpersonateAsync(b.Id);
+        if (!resp.IsSuccessStatusCode) { Snackbar.Add("Не удалось войти", Severity.Error); return; }
+        var r = await resp.Content.ReadFromJsonAsync<ImpersonateDto>();
+        await JS.InvokeVoidAsync("localStorage.setItem", "jwt", r!.Token);
+        await JS.InvokeVoidAsync("localStorage.setItem", "businessName", r.BusinessName);
+        await JS.InvokeVoidAsync("localStorage.setItem", "impersonating", r.BusinessName);
+        Nav.NavigateTo("/dashboard", forceLoad: true);
+    }
+
+    async Task Delete(BusinessDto b)
+    {
+        var dialog = await Dialogs.ShowAsync<DeleteBusinessDialog>("Удаление", new DialogParameters<DeleteBusinessDialog> { { x => x.BusinessName, b.BusinessName } });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled) return;
+        var resp = await Api.AdminDeleteAsync(b.Id, (string)result.Data!);
+        Snackbar.Add(resp.IsSuccessStatusCode ? $"Клиент «{b.BusinessName}» удалён" : "Не удалось удалить", resp.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+        await Load();
+    }
+
+    record BusinessDto(Guid Id, string BusinessName, string Email, DateTime CreatedAt, bool IsActive, bool HasBot, bool OwnerConnected,
+        int Procedures, int KnowledgeFiles, int Appointments, int Conversations, DateTime? LastMessageAt, int OpenTickets);
+    record StatsDto(int Businesses, int ActiveBusinesses, int ConnectedBots, int Appointments, int AppointmentsWeek, int MessagesWeek, int OpenTickets);
+    record BotInfoDto(bool Connected, string? Username, bool TokenValid, string? WebhookUrl, int? Pending, string? LastError);
+    record ImpersonateDto(string Token, string BusinessName);
+    record ErrorDto(string Error);
+}

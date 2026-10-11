@@ -1,0 +1,71 @@
+@page "/admin/settings"
+@layout AdminLayout
+@inherits AdminPage
+@inject ISnackbar Snackbar
+
+<PageTitle>Настройки · Админка BotBase</PageTitle>
+
+<PageHeader Title="Настройки платформы" Description="Куда приходят уведомления о новых обращениях в поддержку." />
+
+@if (_s is not null)
+{
+    <MudGrid Spacing="4">
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-6">
+                <MudText Typo="Typo.h6" Class="mb-1">Техподдержка</MudText>
+                <MudText Typo="Typo.body2" Class="bb-sub mb-5">Этот email показывается отключённым клиентам и получает письма о каждом новом обращении.</MudText>
+                <MudTextField @bind-Value="_email" Label="Email техподдержки" Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Mail" Class="mb-4" Placeholder="support@example.com" />
+                <MudTextField @bind-Value="_chatId" Label="Telegram Chat ID для мгновенных уведомлений" Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentIcon="@Icons.Custom.Brands.Telegram"
+                              HelperText="Узнать свой Chat ID: напишите боту @@userinfobot в Telegram" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-5" OnClick="Save" Disabled="_saving" StartIcon="@Icons.Material.Rounded.Save">Сохранить</MudButton>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-6">
+                <MudText Typo="Typo.h6" Class="mb-4">Каналы доставки</MudText>
+                <div class="d-flex align-center gap-3 mb-4">
+                    <MudIcon Icon="@(_s.SmtpConfigured ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.ErrorOutline)" Color="@(_s.SmtpConfigured ? Color.Success : Color.Warning)" />
+                    <div>
+                        <div style="font-weight:700">Почта (Gmail SMTP)</div>
+                        <div class="bb-sub" style="font-size:.85rem">@(_s.SmtpConfigured ? "Подключена" : "Не настроена: добавьте Smtp__User и Smtp__Password в Railway")</div>
+                    </div>
+                </div>
+                <div class="d-flex align-center gap-3">
+                    <MudIcon Icon="@(_s.TelegramConfigured ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.ErrorOutline)" Color="@(_s.TelegramConfigured ? Color.Success : Color.Warning)" />
+                    <div>
+                        <div style="font-weight:700">Telegram</div>
+                        <div class="bb-sub" style="font-size:.85rem">@(_s.TelegramConfigured ? "Бот уведомлений подключён" : "Не настроен: добавьте Support__TelegramBotToken в Railway")</div>
+                    </div>
+                </div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    SettingsDto? _s;
+    string? _email, _chatId;
+    bool _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await EnsureAdminAsync()) return;
+        var resp = await Api.AdminGetSettingsAsync();
+        if (!await CheckAuthAsync(resp)) return;
+        _s = await resp.Content.ReadFromJsonAsync<SettingsDto>();
+        _email = _s?.SupportEmail;
+        _chatId = _s?.SupportTelegramChatId;
+    }
+
+    async Task Save()
+    {
+        _saving = true;
+        var resp = await Api.AdminSaveSettingsAsync(_email, _chatId);
+        _saving = false;
+        if (resp.IsSuccessStatusCode) Snackbar.Add("Настройки сохранены", Severity.Success);
+        else Snackbar.Add((await resp.Content.ReadFromJsonAsync<ErrorDto>())?.Error ?? "Ошибка", Severity.Error);
+    }
+
+    record SettingsDto(string? SupportEmail, string? SupportTelegramChatId, bool SmtpConfigured, bool TelegramConfigured);
+    record ErrorDto(string Error);
+}

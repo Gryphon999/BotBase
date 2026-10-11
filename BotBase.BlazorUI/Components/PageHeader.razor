@@ -1,0 +1,16 @@
+<div class="bb-page-head bb-fade-in d-flex align-start justify-space-between flex-wrap gap-4">
+    <div>
+        <MudText Typo="Typo.h4">@Title</MudText>
+        @if (Description is not null)
+        {
+            <MudText Typo="Typo.body1" Class="bb-sub">@Description</MudText>
+        }
+    </div>
+    @Actions
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+}

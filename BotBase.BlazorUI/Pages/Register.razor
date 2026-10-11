@@ -4,30 +4,31 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="height:100vh">
-    <MudCard Style="width:100%">
-        <MudCardHeader>
-            <MudText Typo="Typo.h5">Регистрация в BotBase</MudText>
-        </MudCardHeader>
-        <MudCardContent>
-            <MudTextField @bind-Value="_businessName" Label="Название бизнеса" Variant="Variant.Outlined" Class="mb-3" />
-            <MudTextField @bind-Value="_email" Label="Email" InputType="InputType.Email" Variant="Variant.Outlined" Class="mb-3" />
-            <MudTextField @bind-Value="_password" Label="Пароль" InputType="InputType.Password" Variant="Variant.Outlined" />
-            @if (_error is not null)
-            {
-                <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
-            }
-        </MudCardContent>
-        <MudCardActions Class="px-4 pb-4">
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit" Disabled="_loading" FullWidth="true">
-                @(_loading ? "Регистрируем..." : "Зарегистрироваться")
-            </MudButton>
-        </MudCardActions>
-        <MudCardActions Class="px-4 pb-4">
-            <MudButton Href="/login" Variant="Variant.Text" FullWidth="true">Уже есть аккаунт? Войти</MudButton>
-        </MudCardActions>
-    </MudCard>
-</MudContainer>
+<PageTitle>Регистрация · BotBase</PageTitle>
+
+<div class="bb-auth">
+    <AuthHero />
+    <div class="bb-auth-form">
+        <div class="bb-auth-card bb-fade-in">
+            <div class="bb-auth-mobile-brand"><BrandLogo Size="34" /> BotBase</div>
+            <h2>Регистрация в BotBase</h2>
+            <div class="bb-sub">Создайте кабинет — подключение бота займёт пару минут</div>
+            <EditForm Model="this" OnValidSubmit="Submit">
+                <MudTextField @bind-Value="_businessName" Label="Название бизнеса" Variant="Variant.Outlined" Class="mb-4" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Storefront" />
+                <MudTextField @bind-Value="_email" Label="Email" InputType="InputType.Email" Variant="Variant.Outlined" Class="mb-4" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Mail" />
+                <MudTextField @bind-Value="_password" Label="Пароль" InputType="InputType.Password" Variant="Variant.Outlined" HelperText="Не меньше 6 символов" />
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-4">@_error</MudAlert>
+                }
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_loading" FullWidth="true" Size="Size.Large" Class="mt-6">
+                    @(_loading ? "Создаём кабинет..." : "Зарегистрироваться")
+                </MudButton>
+            </EditForm>
+            <MudText Class="mt-6 bb-sub" Align="Align.Center">Уже есть аккаунт? <MudLink Href="/login" Typo="Typo.body1" Style="font-weight:700">Войти</MudLink></MudText>
+        </div>
+    </div>
+</div>
 
 @code {
     string _businessName = "", _email = "", _password = "";
@@ -36,19 +37,23 @@
 
     async Task Submit()
     {
-        _loading = true;
         _error = null;
+        if (string.IsNullOrWhiteSpace(_businessName) || string.IsNullOrWhiteSpace(_email)) { _error = "Заполните название и email"; return; }
+        if (_password.Length < 6) { _error = "Пароль должен быть не короче 6 символов"; return; }
+        _loading = true;
         var resp = await Api.RegisterAsync(_email, _password, _businessName);
         if (resp.IsSuccessStatusCode)
         {
             var result = await resp.Content.ReadFromJsonAsync<LoginResponse>();
             await JS.InvokeVoidAsync("localStorage.setItem", "jwt", result!.Token);
+            await JS.InvokeVoidAsync("localStorage.setItem", "businessName", result.BusinessName);
+            await JS.InvokeVoidAsync("localStorage.removeItem", "impersonating");
             Api.SetToken(result.Token);
             Nav.NavigateTo("/dashboard");
         }
         else
         {
-            _error = "Email уже используется или ошибка сервера";
+            _error = "Этот email уже зарегистрирован";
         }
         _loading = false;
     }

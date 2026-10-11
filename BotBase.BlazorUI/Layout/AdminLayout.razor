@@ -1,0 +1,60 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<MudLayout>
+    <MudAppBar Elevation="0">
+        <MudIconButton Icon="@Icons.Material.Rounded.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="() => _open = !_open" />
+        <MudChip T="string" Color="Color.Primary" Variant="Variant.Text" Icon="@Icons.Material.Rounded.AdminPanelSettings" Class="ml-2">Администратор</MudChip>
+        <MudSpacer />
+        <MudTooltip Text="Выйти из админки">
+            <MudIconButton Icon="@Icons.Material.Rounded.Logout" Color="Color.Inherit" OnClick="Logout" />
+        </MudTooltip>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_open" Elevation="0" Variant="DrawerVariant.Responsive" ClipMode="DrawerClipMode.Never">
+        <div class="bb-drawer-body">
+            <div class="bb-brand"><BrandLogo Size="38" /> BotBase <span style="font-size:.7rem;font-weight:700;color:#A78BFA;margin-left:2px">ADMIN</span></div>
+            <div class="bb-nav-section">Платформа</div>
+            <MudNavMenu>
+                <MudNavLink Href="/admin" Match="NavLinkMatch.All" Icon="@Icons.Material.Rounded.Groups">Клиенты</MudNavLink>
+                <MudNavLink Href="/admin/support" Icon="@Icons.Material.Rounded.SupportAgent">Поддержка</MudNavLink>
+                <MudNavLink Href="/admin/settings" Icon="@Icons.Material.Rounded.Settings">Настройки</MudNavLink>
+            </MudNavMenu>
+            <div class="bb-drawer-foot">
+                <div class="bb-user">
+                    <div class="bb-avatar"><MudIcon Icon="@Icons.Material.Rounded.Shield" Size="Size.Small" /></div>
+                    <div style="min-width:0">
+                        <div class="bb-user-name">@(_email ?? "Администратор")</div>
+                        <div class="bb-user-sub">Главный администратор</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </MudDrawer>
+
+    <MudMainContent Class="px-6 pb-10" Style="padding-top:88px">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="px-0">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    bool _open = true;
+    string? _email;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _email = await JS.InvokeAsync<string?>("localStorage.getItem", "admin_email");
+        StateHasChanged();
+    }
+
+    async Task Logout()
+    {
+        await JS.InvokeVoidAsync("localStorage.removeItem", "admin_jwt");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "admin_email");
+        Nav.NavigateTo("/admin/login");
+    }
+}

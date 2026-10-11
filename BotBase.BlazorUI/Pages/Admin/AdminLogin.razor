@@ -1,0 +1,47 @@
+@page "/admin/login"
+@layout EmptyLayout
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Админка · BotBase</PageTitle>
+
+<div class="bb-auth" style="grid-template-columns:1fr;background:radial-gradient(900px 600px at 70% 0%,#3B2FB8 0%,transparent 60%),#0E0B1F">
+    <div class="bb-auth-form">
+        <MudPaper Class="pa-8 bb-auth-card bb-fade-in mud-elevation-0" Style="border-radius:20px;box-shadow:0 30px 80px rgba(0,0,0,.45)">
+            <div class="d-flex align-center gap-3 mb-6"><BrandLogo Size="40" /><div><div style="font-weight:800;font-size:1.2rem">BotBase</div><div class="bb-sub" style="font-size:.85rem">Панель администратора</div></div></div>
+            <EditForm Model="this" OnValidSubmit="Submit">
+                <MudTextField @bind-Value="_email" Label="Email администратора" Variant="Variant.Outlined" Class="mb-4" />
+                <MudTextField @bind-Value="_password" Label="Пароль" InputType="InputType.Password" Variant="Variant.Outlined" />
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-4">@_error</MudAlert>
+                }
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large" Class="mt-6" Disabled="_loading">
+                    @(_loading ? "Входим..." : "Войти в админку")
+                </MudButton>
+            </EditForm>
+        </MudPaper>
+    </div>
+</div>
+
+@code {
+    string _email = "", _password = "";
+    string? _error;
+    bool _loading;
+
+    async Task Submit()
+    {
+        _loading = true;
+        _error = null;
+        var resp = await Api.AdminLoginAsync(_email, _password);
+        _loading = false;
+        if (!resp.IsSuccessStatusCode) { _error = "Неверный email или пароль"; return; }
+        var r = await resp.Content.ReadFromJsonAsync<AdminLoginResponse>();
+        await JS.InvokeVoidAsync("localStorage.setItem", "admin_jwt", r!.Token);
+        await JS.InvokeVoidAsync("localStorage.setItem", "admin_email", r.Email);
+        Nav.NavigateTo("/admin");
+    }
+
+    record AdminLoginResponse(string Token, string Email);
+}

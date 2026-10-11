@@ -73,4 +73,29 @@ public class ApiClient(HttpClient http)
 
     public Task<HttpResponseMessage> SetWebhookAsync(string? url) =>
         http.PutAsJsonAsync("api/integration/webhook", new { url });
+
+    // ---- Главная ----
+    public Task<HttpResponseMessage> GetDashboardAsync() => http.GetAsync("api/dashboard");
+
+    // ---- Поддержка (клиент) ----
+    public Task<HttpResponseMessage> GetTicketsAsync() => http.GetAsync("api/support/tickets");
+    public Task<HttpResponseMessage> GetTicketAsync(Guid id) => http.GetAsync($"api/support/tickets/{id}");
+    public Task<HttpResponseMessage> CreateTicketAsync(string subject, string text) => http.PostAsJsonAsync("api/support/tickets", new { subject, text });
+    public Task<HttpResponseMessage> ReplyTicketAsync(Guid id, string text) => http.PostAsJsonAsync($"api/support/tickets/{id}/messages", new { text });
+
+    // ---- Админка ----
+    public Task<HttpResponseMessage> AdminLoginAsync(string email, string password) => http.PostAsJsonAsync("api/admin/auth/login", new { email, password });
+    public Task<HttpResponseMessage> AdminStatsAsync() => http.GetAsync("api/admin/stats");
+    public Task<HttpResponseMessage> AdminBusinessesAsync() => http.GetAsync("api/admin/businesses");
+    public Task<HttpResponseMessage> AdminBotInfoAsync(Guid id) => http.GetAsync($"api/admin/businesses/{id}/bot");
+    public Task<HttpResponseMessage> AdminSetActiveAsync(Guid id, bool active) => http.PostAsync($"api/admin/businesses/{id}/{(active ? "enable" : "disable")}", null);
+    public Task<HttpResponseMessage> AdminRestartBotAsync(Guid id) => http.PostAsync($"api/admin/businesses/{id}/restart-bot", null);
+    public Task<HttpResponseMessage> AdminImpersonateAsync(Guid id) => http.PostAsync($"api/admin/businesses/{id}/impersonate", null);
+    public Task<HttpResponseMessage> AdminDeleteAsync(Guid id, string confirmName) => http.DeleteAsync($"api/admin/businesses/{id}?confirmName={Uri.EscapeDataString(confirmName)}");
+    public Task<HttpResponseMessage> AdminGetSettingsAsync() => http.GetAsync("api/admin/settings");
+    public Task<HttpResponseMessage> AdminSaveSettingsAsync(string? supportEmail, string? supportTelegramChatId) => http.PutAsJsonAsync("api/admin/settings", new { supportEmail, supportTelegramChatId });
+    public Task<HttpResponseMessage> AdminTicketsAsync(string? status) => http.GetAsync("api/admin/support/tickets" + (status is null ? "" : "?status=" + status));
+    public Task<HttpResponseMessage> AdminTicketAsync(Guid id) => http.GetAsync($"api/admin/support/tickets/{id}");
+    public Task<HttpResponseMessage> AdminReplyTicketAsync(Guid id, string text) => http.PostAsJsonAsync($"api/admin/support/tickets/{id}/reply", new { text });
+    public Task<HttpResponseMessage> AdminCloseTicketAsync(Guid id) => http.PostAsync($"api/admin/support/tickets/{id}/close", null);
 }

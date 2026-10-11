@@ -1,0 +1,20 @@
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Rounded.WarningAmber" Color="Color.Error" Class="mr-2" Style="vertical-align:middle" />Удалить клиента навсегда?</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Class="mb-3">Будут удалены аккаунт <b>@BusinessName</b>, его процедуры, расписание, база знаний, записи, разговоры и обращения в поддержку. Бот перестанет отвечать. <b>Отменить это нельзя.</b></MudText>
+        <MudText Typo="Typo.body2" Class="bb-sub mb-2">Для подтверждения введите название бизнеса:</MudText>
+        <MudTextField @bind-Value="_typed" Variant="Variant.Outlined" Placeholder="@BusinessName" Immediate="true" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Отмена</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="@(_typed.Trim() != BusinessName.Trim())" OnClick="() => MudDialog.Close(DialogResult.Ok(_typed))">Удалить навсегда</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string BusinessName { get; set; } = "";
+    string _typed = "";
+}

@@ -1,40 +1,99 @@
 @inherits LayoutComponentBase
+@inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <MudLayout>
-    <MudAppBar Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.h6" Class="ml-3">BotBase</MudText>
+    <MudAppBar Elevation="0" Dense="false">
+        <MudIconButton Icon="@Icons.Material.Rounded.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
         <MudSpacer />
-        <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" OnClick="Logout" Title="Выйти" />
+        <MudTooltip Text="Написать в поддержку">
+            <MudIconButton Icon="@Icons.Material.Rounded.SupportAgent" Color="Color.Inherit" Href="/support" />
+        </MudTooltip>
+        <MudTooltip Text="Выйти">
+            <MudIconButton Icon="@Icons.Material.Rounded.Logout" Color="Color.Inherit" OnClick="Logout" />
+        </MudTooltip>
     </MudAppBar>
-    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" ClipMode="DrawerClipMode.Always">
-        <MudNavMenu>
-            <MudNavLink Href="/dashboard" Icon="@Icons.Material.Filled.Dashboard">Дашборд</MudNavLink>
-            <MudNavLink Href="/bot-setup" Icon="@Icons.Material.Filled.SmartToy">Настройка бота</MudNavLink>
-            <MudNavLink Href="/knowledge" Icon="@Icons.Material.Filled.MenuBook">База знаний</MudNavLink>
-            <MudNavLink Href="/procedures" Icon="@Icons.Material.Filled.ContentCut">Процедуры</MudNavLink>
-            <MudNavLink Href="/schedule" Icon="@Icons.Material.Filled.CalendarMonth">Расписание</MudNavLink>
-            <MudNavLink Href="/appointments" Icon="@Icons.Material.Filled.EventNote">Записи</MudNavLink>
-            <MudNavLink Href="/conversations" Icon="@Icons.Material.Filled.Forum">Разговоры</MudNavLink>
-            <MudNavLink Href="/integration" Icon="@Icons.Material.Filled.Cable">Интеграция</MudNavLink>
-        </MudNavMenu>
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="0" Variant="DrawerVariant.Responsive" ClipMode="DrawerClipMode.Never">
+        <div class="bb-drawer-body">
+            <div class="bb-brand"><BrandLogo Size="38" /> BotBase</div>
+
+            <div class="bb-nav-section">Обзор</div>
+            <MudNavMenu>
+                <MudNavLink Href="/dashboard" Icon="@Icons.Material.Rounded.SpaceDashboard">Главная</MudNavLink>
+                <MudNavLink Href="/appointments" Icon="@Icons.Material.Rounded.EventNote">Записи</MudNavLink>
+                <MudNavLink Href="/conversations" Icon="@Icons.Material.Rounded.Forum">Разговоры</MudNavLink>
+            </MudNavMenu>
+
+            <div class="bb-nav-section">Настройка</div>
+            <MudNavMenu>
+                <MudNavLink Href="/bot-setup" Icon="@Icons.Material.Rounded.SmartToy">Бот</MudNavLink>
+                <MudNavLink Href="/procedures" Icon="@Icons.Material.Rounded.ContentCut">Процедуры</MudNavLink>
+                <MudNavLink Href="/schedule" Icon="@Icons.Material.Rounded.CalendarMonth">Расписание</MudNavLink>
+                <MudNavLink Href="/knowledge" Icon="@Icons.Material.Rounded.MenuBook">База знаний</MudNavLink>
+                <MudNavLink Href="/integration" Icon="@Icons.Material.Rounded.Cable">Интеграция</MudNavLink>
+            </MudNavMenu>
+
+            <div class="bb-nav-section">Помощь</div>
+            <MudNavMenu>
+                <MudNavLink Href="/support" Icon="@Icons.Material.Rounded.SupportAgent">Поддержка</MudNavLink>
+            </MudNavMenu>
+
+            <div class="bb-drawer-foot">
+                <div class="bb-user">
+                    <div class="bb-avatar">@Initials</div>
+                    <div style="min-width:0">
+                        <div class="bb-user-name">@(_businessName ?? "Мой бизнес")</div>
+                        <div class="bb-user-sub">Личный кабинет</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </MudDrawer>
-    <MudMainContent Class="pa-6">
-        @Body
+
+    <MudMainContent Class="px-6 pb-10" Style="padding-top:88px">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="px-0">
+            @if (_impersonating is not null)
+            {
+                <div class="bb-impersonation">
+                    <span><MudIcon Icon="@Icons.Material.Rounded.AdminPanelSettings" Size="Size.Small" Class="mr-2" Style="vertical-align:middle" />Вы в кабинете клиента «@_impersonating» как администратор</span>
+                    <MudButton Variant="Variant.Filled" Size="Size.Small" Color="Color.Dark" OnClick="BackToAdmin">Вернуться в админку</MudButton>
+                </div>
+            }
+            @Body
+        </MudContainer>
     </MudMainContent>
 </MudLayout>
 
 @code {
     bool _drawerOpen = true;
+    string? _businessName, _impersonating;
+
+    string Initials => string.Concat((_businessName ?? "Б").Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpper(w[0])));
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _businessName = await JS.InvokeAsync<string?>("localStorage.getItem", "businessName");
+        _impersonating = await JS.InvokeAsync<string?>("localStorage.getItem", "impersonating");
+        StateHasChanged();
+    }
 
     void ToggleDrawer() => _drawerOpen = !_drawerOpen;
-
-    [Inject] NavigationManager Nav { get; set; } = default!;
-    [Inject] IJSRuntime JS { get; set; } = default!;
 
     async Task Logout()
     {
         await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
-        Nav.NavigateTo("/login");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "businessName");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "impersonating");
+        Nav.NavigateTo(_impersonating is null ? "/login" : "/admin");
+    }
+
+    async Task BackToAdmin()
+    {
+        await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "businessName");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "impersonating");
+        Nav.NavigateTo("/admin", forceLoad: true);
     }
 }

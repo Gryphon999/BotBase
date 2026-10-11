@@ -5,20 +5,17 @@
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
-<PageTitle>Записи — BotBase</PageTitle>
+<PageTitle>Записи · BotBase</PageTitle>
 
-<div class="d-flex align-center justify-space-between mb-2">
-    <MudText Typo="Typo.h5">Записи клиентов</MudText>
-    <div class="d-flex align-center">
-        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="PrevMonth" />
-        <MudText Typo="Typo.h6" Style="min-width:180px;text-align:center">@_currentMonth.ToString("MMMM yyyy")</MudText>
-        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="NextMonth" />
-    </div>
-</div>
-<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-4">
-    Дни с записями показывают счётчик — кликните, чтобы увидеть кто, на какое время
-    и на какую процедуру записался. Здесь же можно подтверждать или отменять записи.
-</MudText>
+<PageHeader Title="Записи клиентов" Description="Кликните на день, чтобы увидеть, кто, когда и на какую процедуру записался. Здесь же можно подтверждать или отменять записи.">
+    <Actions>
+        <MudPaper Class="d-flex align-center px-1 py-1" Style="border-radius:999px">
+            <MudIconButton Icon="@Icons.Material.Rounded.ChevronLeft" OnClick="PrevMonth" Size="Size.Small" />
+            <MudText Typo="Typo.subtitle1" Style="min-width:160px;text-align:center;text-transform:capitalize">@_currentMonth.ToString("MMMM yyyy")</MudText>
+            <MudIconButton Icon="@Icons.Material.Rounded.ChevronRight" OnClick="NextMonth" Size="Size.Small" />
+        </MudPaper>
+    </Actions>
+</PageHeader>
 
 @if (_loading)
 {
@@ -52,10 +49,10 @@
             var isToday = date.Date == DateTime.Today;
             var cellDate = date;
 
-            <MudPaper Class="pa-2" Style="@($"min-height:64px;cursor:pointer;{(isSelected ? "border:2px solid var(--mud-palette-primary);" : "")}{(isToday ? "background:var(--mud-palette-primary-lighten);" : "")}")"
+            <MudPaper Class="pa-2" Style="@($"min-height:64px;cursor:pointer;{(isSelected ? "border:2px solid var(--mud-palette-primary);" : "")}{(isToday ? "background:#F1EFFF;box-shadow:inset 0 0 0 1px #C4B5FD;" : "")}")"
                       Elevation="@(isSelected ? 4 : 1)"
                       @onclick="() => SelectDate(cellDate)">
-                <MudText Typo="Typo.body2" Color="@(isToday ? Color.Primary : Color.Default)">
+                <MudText Typo="Typo.body2" Color="@(isToday ? Color.Primary : Color.Default)" Style="@(isToday ? "font-weight:800" : "font-weight:600")">
                     <strong>@day</strong>
                 </MudText>
                 @if (count > 0)

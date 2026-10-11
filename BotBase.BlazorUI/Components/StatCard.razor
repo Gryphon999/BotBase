@@ -1,0 +1,19 @@
+<div class="bb-stat bb-fade-in">
+    <div class="bb-stat-top">
+        <span class="bb-stat-label">@Label</span>
+        <span class="bb-stat-icon" style="background:@(Color)1A;color:@Color"><MudIcon Icon="@Icon" Size="Size.Small" /></span>
+    </div>
+    <div class="bb-stat-value">@Value</div>
+    @if (Hint is not null)
+    {
+        <MudText Typo="Typo.caption" Class="bb-sub">@Hint</MudText>
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = Icons.Material.Filled.Insights;
+    [Parameter] public string Color { get; set; } = "#6D5DFC";
+    [Parameter] public string? Hint { get; set; }
+}
