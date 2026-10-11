@@ -11,7 +11,7 @@ namespace BotBase.Api.Controllers;
 // Webhook только сохраняет сообщение клиента и ставит чат в очередь — сразу отвечаем Telegram «принято».
 // Ответ формирует BotWorker: склеивает серию сообщений, ждёт свободный лимит ИИ, показывает «печатает…».
 [ApiController]
-public class WebhookController(AppDbContext db, TelegramService telegram, ChatQueue queue) : ControllerBase
+public class WebhookController(AppDbContext db, TelegramService telegram, ChatQueue queue, OwnerMessages ownerMessages) : ControllerBase
 {
     [HttpPost("webhook/{businessId:guid}")]
     public async Task<IActionResult> Handle(Guid businessId, [FromBody] Update update)
@@ -23,12 +23,19 @@ public class WebhookController(AppDbContext db, TelegramService telegram, ChatQu
         if (business is null || business.BotToken is null)
             return Ok();
 
-        if (text == "/start" && business.OwnerNotificationChatId is null)
+        var isOwner = business.OwnerNotificationChatId == chatId;
+        if (text == "/start" && (business.OwnerNotificationChatId is null || isOwner))
         {
             business.OwnerNotificationChatId = chatId;
             await db.SaveChangesAsync();
-            await telegram.SendMessageAsync(business.BotToken, chatId,
-                "✅ Вы подключены как владелец! Теперь вы будете получать уведомления о новых записях клиентов.");
+            await telegram.SendMessageAsync(business.BotToken, chatId, ownerMessages.Welcome);
+            return Ok();
+        }
+
+        // Ссылку на кабинет получает только владелец; у клиентов команда уходит боту как обычный текст.
+        if (isOwner && OwnerMessages.IsCabinetCommand(text))
+        {
+            await telegram.SendMessageAsync(business.BotToken, chatId, ownerMessages.Cabinet);
             return Ok();
         }
 
