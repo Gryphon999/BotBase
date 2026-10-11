@@ -72,7 +72,8 @@ public class BookingConflictTests(PostgresFixture pg)
         Assert.Contains("12:00", toViktor); // предлагаем ближайшее свободное время
 
         // Владелец получил уведомление только об одной записи.
-        Assert.Single(app.Telegram.To(OwnerChat), m => m.Contains("Новая запись"));
+        var notice = Assert.Single(app.Telegram.To(OwnerChat), m => m.Contains("Новая запись"));
+        Assert.Contains("https://botbase.test/dashboard", notice); // ссылка на кабинет в каждом уведомлении
     }
 
     [Fact]

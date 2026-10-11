@@ -60,6 +60,7 @@ builder.Services.AddSingleton<ChatQueue>();
 builder.Services.AddSingleton<AiGateway>();
 builder.Services.AddSingleton<KnowledgeRetriever>();
 builder.Services.AddScoped<BotReplyService>();
+builder.Services.AddSingleton<OwnerMessages>();
 builder.Services.AddHostedService<BotWorker>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]!;

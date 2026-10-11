@@ -13,7 +13,8 @@ public class BotReplyService(
     TelegramService telegram,
     AiGateway ai,
     KnowledgeRetriever knowledge,
-    CrmWebhookService crmWebhook)
+    CrmWebhookService crmWebhook,
+    OwnerMessages ownerMessages)
 {
     public async Task<string> GenerateReplyAsync(DbBusiness business, Guid conversationId, Func<Task>? onBusy, CancellationToken ct)
     {
@@ -249,7 +250,8 @@ public class BotReplyService(
                           $"Телефон: {appt.ClientPhone}\n" +
                           $"Процедура: {appt.ProcedureName}\n" +
                           $"Дата и время: {wallClock:dd.MM.yyyy HH:mm}\n" +
-                          $"Длительность: {appt.DurationMinutes} мин";
+                          $"Длительность: {appt.DurationMinutes} мин" +
+                          ownerMessages.CabinetFooter;
                 await telegram.SendMessageAsync(botToken, ownerId, msg);
             }
         }
