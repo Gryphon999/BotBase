@@ -7,6 +7,12 @@
 
 <PageTitle>Мастера · BotBase</PageTitle>
 
+@if (_locked)
+{
+    <CrmLocked Title="Мастера" />
+    return;
+}
+
 <PageHeader Title="Мастера" Description="Если у вас несколько мастеров, добавьте их: бот будет записывать к свободному мастеру, который делает нужную процедуру, и клиент сможет выбрать мастера сам.">
     <Actions>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.PersonAdd" OnClick="() => Open(null)">Добавить мастера</MudButton>
@@ -51,6 +57,7 @@ else
 }
 
 @code {
+    bool _locked;
     List<MasterItem>? _masters;
     List<ProcedureItem> _procedures = [];
     static readonly string[] Short = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -58,6 +65,9 @@ else
     protected override async Task OnInitializedAsync()
     {
         if (!await Api.EnsureSignedInAsync(JS, Nav)) return;
+        // Раздел тарифа «Бизнес»: без доступа — предложение подключить, данные не запрашиваем.
+        _locked = !(await Api.GetCrmAccessAsync()).Enabled;
+        if (_locked) return;
         _procedures = await Api.GetProcedureListAsync();
         await Load();
     }

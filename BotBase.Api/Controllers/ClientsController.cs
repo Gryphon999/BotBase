@@ -1,3 +1,4 @@
+using BotBase.Api.Filters;
 using BotBase.Api.Data;
 using BotBase.Api.Data.Entities;
 using BotBase.Api.Extensions;
@@ -10,6 +11,7 @@ namespace BotBase.Api.Controllers;
 
 // База клиентов: карточки появляются сами из записей (бот, вручную, CRM) — по номеру телефона.
 [Authorize]
+[RequiresCrm]
 [ApiController]
 [Route("api/clients")]
 public class ClientsController(AppDbContext db, BookingService booking) : ControllerBase

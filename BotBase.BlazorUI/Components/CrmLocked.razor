@@ -1,0 +1,21 @@
+@* Показывается вместо CRM-страниц, если тариф «Бизнес» не подключён (или закончился срок оплаты). *@
+<div class="bb-locked bb-fade-in">
+    <div class="bb-locked-icon"><MudIcon Icon="@Icons.Material.Rounded.Lock" Style="font-size:2rem" /></div>
+    <MudText Typo="Typo.h5" Style="font-weight:800" Class="mb-2">@Title — на тарифе «Бизнес»</MudText>
+    <MudText Class="bb-sub mb-4" Style="max-width:560px">
+        Бот, запись по расписанию и календарь работают и на базовом тарифе. Тариф «Бизнес» превращает кабинет в CRM:
+    </MudText>
+    <div class="bb-locked-list mb-5">
+        <div><MudIcon Icon="@Icons.Material.Rounded.NotificationsActive" Size="Size.Small" /> Напоминания клиентам с кнопками «Приду / Отменить» — меньше неявок</div>
+        <div><MudIcon Icon="@Icons.Material.Rounded.Groups" Size="Size.Small" /> База клиентов: история визитов, заметки, сколько потратил</div>
+        <div><MudIcon Icon="@Icons.Material.Rounded.EditNote" Size="Size.Small" /> Ручная запись и перенос — без двойных записей</div>
+        <div><MudIcon Icon="@Icons.Material.Rounded.Badge" Size="Size.Small" /> Несколько мастеров со своим графиком</div>
+        <div><MudIcon Icon="@Icons.Material.Rounded.Star" Size="Size.Small" /> Отзывы после визита и возврат клиентов</div>
+        <div><MudIcon Icon="@Icons.Material.Rounded.Insights" Size="Size.Small" /> Статистика: сколько клиентов и выручки принёс бот</div>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" StartIcon="@Icons.Material.Rounded.RocketLaunch" Href="/support?topic=crm">Подключить тариф «Бизнес»</MudButton>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Этот раздел";
+}

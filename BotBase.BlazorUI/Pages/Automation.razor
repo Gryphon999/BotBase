@@ -6,6 +6,12 @@
 
 <PageTitle>Автосообщения · BotBase</PageTitle>
 
+@if (_locked)
+{
+    <CrmLocked Title="Автосообщения" />
+    return;
+}
+
 <PageHeader Title="Автосообщения" Description="Бот сам пишет клиентам в Telegram: напоминает о записи, просит оценить визит и зовёт тех, кто давно не приходил. Ночью (с 21:00 до 9:00) сообщения не отправляются." />
 
 @if (_s is null)
@@ -15,6 +21,16 @@
 else
 {
     <MudPaper Class="pa-5 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-1"><MudIcon Icon="@Icons.Material.Rounded.Translate" Color="Color.Primary" Class="mr-2" Style="vertical-align:middle" />Язык сообщений</MudText>
+        <MudText Class="bb-sub mb-3">Бот пишет клиенту на том языке, на котором клиент сам пишет боту: армянском, русском или английском. Если клиент ещё ничего не писал (например, вы записали его вручную), используется язык ниже.</MudText>
+        <MudToggleGroup T="string" Value="_lang" ValueChanged="ChangeLanguage" Color="Color.Primary" Outlined="true" Style="max-width:420px">
+            <MudToggleItem Value="@("hy")" Text="Հայերեն" />
+            <MudToggleItem Value="@("ru")" Text="Русский" />
+            <MudToggleItem Value="@("en")" Text="English" />
+        </MudToggleGroup>
+    </MudPaper>
+
+    <MudPaper Class="pa-5 mb-4">
         <div class="d-flex align-start justify-space-between gap-4 flex-wrap">
             <div style="max-width:620px">
                 <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Rounded.NotificationsActive" Color="Color.Primary" Class="mr-2" Style="vertical-align:middle" />Напоминание о записи</MudText>
@@ -22,7 +38,10 @@ else
             </div>
             <MudSwitch @bind-Value="_reminders" Color="Color.Primary" />
         </div>
-        <div class="bb-msg-preview mt-3">Здравствуйте, Анна! Напоминаем о записи в «Ваш салон»: завтра в 14:00, Маникюр.<br /><br />Подтвердите, пожалуйста, что придёте 🙏<div class="bb-msg-buttons"><span>✅ Приду</span><span>❌ Отменить</span></div></div>
+        @if (_preview is not null)
+        {
+            <div class="bb-msg-preview mt-3" style="white-space:pre-line">@_preview.Reminder<div class="bb-msg-buttons">@foreach (var b in _preview.ReminderButtons) { <span>@b</span> }</div></div>
+        }
     </MudPaper>
 
     <MudPaper Class="pa-5 mb-4">
@@ -38,7 +57,10 @@ else
             <MudTextField @bind-Value="_reviewUrl" Label="Ссылка для отзывов (необязательно)" Variant="Variant.Outlined" Class="mt-3" Style="max-width:620px"
                           Placeholder="https://g.page/… или ссылка на Яндекс Карты / Instagram" />
         }
-        <div class="bb-msg-preview mt-3">Спасибо, что были у нас в «Ваш салон»! Как вам визит? Оцените, пожалуйста, от 1 до 5:<div class="bb-msg-buttons"><span>1 ⭐</span><span>2 ⭐</span><span>3 ⭐</span><span>4 ⭐</span><span>5 ⭐</span></div></div>
+        @if (_preview is not null)
+        {
+            <div class="bb-msg-preview mt-3">@_preview.Review<div class="bb-msg-buttons"><span>1 ⭐</span><span>2 ⭐</span><span>3 ⭐</span><span>4 ⭐</span><span>5 ⭐</span></div></div>
+        }
     </MudPaper>
 
     <MudPaper Class="pa-5 mb-4">
@@ -53,7 +75,10 @@ else
         {
             <MudNumericField @bind-Value="_winbackDays" Label="Через сколько дней без визитов" Min="14" Max="365" Variant="Variant.Outlined" Class="mt-3" Style="max-width:260px" />
         }
-        <div class="bb-msg-preview mt-3">Здравствуйте, Анна! Давно не виделись в «Ваш салон» 🙂 Хотите записаться? Напишите удобный день — подберём время.</div>
+        @if (_preview is not null)
+        {
+            <div class="bb-msg-preview mt-3">@_preview.Winback</div>
+        }
     </MudPaper>
 
     <MudPaper Class="pa-5 mb-4">
@@ -72,6 +97,7 @@ else
 }
 
 @code {
+    bool _locked;
     static readonly (string Id, string Name)[] Zones =
     [
         ("Asia/Yerevan", "Ереван (UTC+4)"), ("Asia/Tbilisi", "Тбилиси (UTC+4)"), ("Asia/Baku", "Баку (UTC+4)"), ("Asia/Dubai", "Дубай (UTC+4)"),
@@ -85,21 +111,33 @@ else
     string? _reviewUrl, _error;
     int _winbackDays = 45;
     string _zone = "Asia/Yerevan";
+    string _lang = "ru";
+    ApiClient.AutomationPreview? _preview;
+
+    async Task ChangeLanguage(string lang)
+    {
+        _lang = lang;
+        _preview = await Api.GetAutomationPreviewAsync(lang);
+    }
 
     protected override async Task OnInitializedAsync()
     {
         if (!await Api.EnsureSignedInAsync(JS, Nav)) return;
+        // Раздел тарифа «Бизнес»: без доступа — предложение подключить, данные не запрашиваем.
+        _locked = !(await Api.GetCrmAccessAsync()).Enabled;
+        if (_locked) return;
         _s = await Api.GetAutomationAsync();
         if (_s is null) return;
-        (_reminders, _reviews, _reviewUrl, _winback, _winbackDays, _zone) =
-            (_s.RemindersEnabled, _s.ReviewRequestsEnabled, _s.ReviewUrl, _s.WinbackEnabled, _s.WinbackAfterDays, _s.TimeZone);
+        (_reminders, _reviews, _reviewUrl, _winback, _winbackDays, _zone, _lang) =
+            (_s.RemindersEnabled, _s.ReviewRequestsEnabled, _s.ReviewUrl, _s.WinbackEnabled, _s.WinbackAfterDays, _s.TimeZone, _s.MessagesLanguage);
+        _preview = await Api.GetAutomationPreviewAsync(_lang);
     }
 
     async Task Save()
     {
         _saving = true;
         _error = null;
-        var resp = await Api.SaveAutomationAsync(new AutomationSettings(_zone, _reminders, _reviews, _reviewUrl, _winback, _winbackDays));
+        var resp = await Api.SaveAutomationAsync(new AutomationSettings(_zone, _reminders, _reviews, _reviewUrl, _winback, _winbackDays, _lang));
         _saving = false;
         if (resp.IsSuccessStatusCode) Snackbar.Add("Сохранено", Severity.Success);
         else _error = (await ApiClient.ProblemAsync(resp)).Error;

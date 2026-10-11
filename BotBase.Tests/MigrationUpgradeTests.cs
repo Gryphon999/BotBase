@@ -73,6 +73,8 @@ public class MigrationUpgradeTests(PostgresFixture pg)
             Assert.Equal(("37491123456", 777L), (client.PhoneKey, client.TelegramChatId!.Value));
             Assert.All(await db.Appointments.ToListAsync(), a => Assert.Equal((client.Id, 2500m), (a.ClientId!.Value, a.Price!.Value)));
             Assert.Equal((true, "Asia/Yerevan", 45, false, false), (b.RemindersEnabled, b.TimeZone, b.WinbackAfterDays, b.WinbackEnabled, b.ReviewRequestsEnabled));
+            // Доступ к CRM (тариф «Бизнес») у существующих бизнесов закрыт, пока его не откроет админ; язык автосообщений — русский.
+            Assert.Equal((false, (DateTime?)null, "ru"), (b.CrmEnabled, b.CrmUntil, b.MessagesLanguage));
             // Прошедший визит помечен — автосообщения о нём не уйдут.
             Assert.NotNull((await db.Appointments.SingleAsync(a => a.ClientName == "Аня")).ReminderSentAt);
             Assert.Equal("Помогите", (await db.SupportMessages.SingleAsync()).Text);

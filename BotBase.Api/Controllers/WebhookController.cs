@@ -76,24 +76,25 @@ public class WebhookController(AppDbContext db, TelegramService telegram, ChatQu
         // Нажать кнопку может только тот клиент, которому она пришла.
         if (appt is null || await messenger.ChatOfAsync(appt) != chat.Id)
         {
-            await telegram.AnswerCallbackAsync(token, callback.Id, "Запись не найдена");
+            await telegram.AnswerCallbackAsync(token, callback.Id, ClientTexts.ButtonNotFound(await messenger.LanguageAsync(business, chat.Id)));
             return Ok();
         }
         await telegram.RemoveButtonsAsync(token, chat.Id, callback.Message.Id);
         var now = BusinessClock.Now(business.TimeZone);
+        var lang = await messenger.LanguageAsync(business, chat.Id);
 
         if (action == ClientMessenger.Confirm)
         {
             if (appt.Status == AppointmentStatus.Cancelled)
             {
-                await telegram.AnswerCallbackAsync(token, callback.Id, "Эта запись уже отменена");
+                await telegram.AnswerCallbackAsync(token, callback.Id, ClientTexts.ButtonTooLate(lang));
                 return Ok();
             }
             appt.ClientConfirmedAt ??= DateTime.UtcNow;
             appt.Status = AppointmentStatus.Confirmed;
             appt.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
-            await telegram.AnswerCallbackAsync(token, callback.Id, "Спасибо!");
+            await telegram.AnswerCallbackAsync(token, callback.Id, ClientTexts.ButtonThanks(lang));
             await messenger.SendAsync(business, chat.Id, ClientTexts.Confirmed);
             if (business.OwnerNotificationChatId is { } owner) await telegram.SendMessageAsync(token, owner, ownerMessages.ClientConfirmed(appt));
             if (business.CrmWebhookUrl is { } url) await crmWebhook.FireAsync(url, "appointment.confirmed", appt);
@@ -102,13 +103,13 @@ public class WebhookController(AppDbContext db, TelegramService telegram, ChatQu
         {
             if (appt.Status == AppointmentStatus.Cancelled || appt.ScheduledAt < now)
             {
-                await telegram.AnswerCallbackAsync(token, callback.Id, "Эту запись уже нельзя отменить");
+                await telegram.AnswerCallbackAsync(token, callback.Id, ClientTexts.ButtonTooLate(lang));
                 return Ok();
             }
             appt.Status = AppointmentStatus.Cancelled;
             appt.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
-            await telegram.AnswerCallbackAsync(token, callback.Id, "Запись отменена");
+            await telegram.AnswerCallbackAsync(token, callback.Id, ClientTexts.ButtonCancelled(lang));
             await messenger.SendAsync(business, chat.Id, ClientTexts.CancelledByClient);
             if (business.OwnerNotificationChatId is { } owner) await telegram.SendMessageAsync(token, owner, ownerMessages.ClientCancelled(appt));
             if (business.CrmWebhookUrl is { } url) await crmWebhook.FireAsync(url, "appointment.cancelled", appt);
@@ -119,10 +120,10 @@ public class WebhookController(AppDbContext db, TelegramService telegram, ChatQu
             var first = appt.Rating is null;
             appt.Rating = rating;
             await db.SaveChangesAsync();
-            await telegram.AnswerCallbackAsync(token, callback.Id, "Спасибо за оценку!");
+            await telegram.AnswerCallbackAsync(token, callback.Id, ClientTexts.ButtonThanks(lang));
             if (first)
             {
-                await messenger.SendAsync(business, chat.Id, ClientTexts.ThanksForRating(business, rating));
+                await messenger.SendAsync(business, chat.Id, l => ClientTexts.ThanksForRating(l, business, rating));
                 if (rating <= 3 && business.OwnerNotificationChatId is { } owner)
                     await telegram.SendMessageAsync(token, owner, ownerMessages.LowRating(appt, rating));
             }

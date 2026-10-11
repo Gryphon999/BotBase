@@ -1,3 +1,4 @@
+using BotBase.Api.Filters;
 using BotBase.Api.Data;
 using BotBase.Api.Data.Entities;
 using BotBase.Api.Extensions;
@@ -95,7 +96,7 @@ public class AppointmentsController(AppDbContext db, CrmWebhookService webhook, 
     }
 
     // Запись, которую владелец вносит сам (клиент позвонил или пришёл). Проверяется так же, как запись от бота.
-    [HttpPost("manual")]
+    [HttpPost("manual"), RequiresCrm]
     public async Task<IActionResult> CreateManual(ManualAppointmentRequest req)
     {
         var businessId = User.GetBusinessId();
@@ -110,12 +111,12 @@ public class AppointmentsController(AppDbContext db, CrmWebhookService webhook, 
         if (req.NotifyClient)
         {
             var business = await db.Businesses.FindAsync(businessId);
-            await messenger.SendAsync(business!, appt, ClientTexts.Booked(business!, appt));
+            await messenger.SendAsync(business!, appt, l => ClientTexts.Booked(l, business!, appt));
         }
         return Ok(new { appt.Id, appt.ScheduledAt, masterName = appt.Master?.Name });
     }
 
-    [HttpPut("{id:guid}/reschedule")]
+    [HttpPut("{id:guid}/reschedule"), RequiresCrm]
     public async Task<IActionResult> Reschedule(Guid id, RescheduleRequest req)
     {
         var businessId = User.GetBusinessId();
@@ -131,7 +132,7 @@ public class AppointmentsController(AppDbContext db, CrmWebhookService webhook, 
         if (req.NotifyClient)
         {
             var business = await db.Businesses.FindAsync(businessId);
-            await messenger.SendAsync(business!, appt, ClientTexts.Rescheduled(appt));
+            await messenger.SendAsync(business!, appt, l => ClientTexts.Rescheduled(l, appt));
         }
         return NoContent();
     }
@@ -166,13 +167,13 @@ public class AppointmentsController(AppDbContext db, CrmWebhookService webhook, 
         {
             var business = await db.Businesses.FindAsync(businessId);
             await db.Entry(appt).Reference(a => a.Master).LoadAsync();
-            await messenger.SendAsync(business!, appt, ClientTexts.CancelledByOwner(appt));
+            await messenger.SendAsync(business!, appt, l => ClientTexts.CancelledByOwner(l, appt));
         }
 
         return NoContent();
     }
 
-    [HttpPatch("{id:guid}/no-show")]
+    [HttpPatch("{id:guid}/no-show"), RequiresCrm]
     public async Task<IActionResult> SetNoShow(Guid id, [FromBody] NoShowRequest req)
     {
         var businessId = User.GetBusinessId();

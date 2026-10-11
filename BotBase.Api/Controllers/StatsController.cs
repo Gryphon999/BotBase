@@ -1,3 +1,4 @@
+using BotBase.Api.Filters;
 using BotBase.Api.Data;
 using BotBase.Api.Data.Entities;
 using BotBase.Api.Extensions;
@@ -10,6 +11,7 @@ namespace BotBase.Api.Controllers;
 
 // Статистика за месяц: сколько записей, сколько из них сделал бот, выручка, неявки, популярные услуги, загрузка мастеров.
 [Authorize]
+[RequiresCrm]
 [ApiController]
 [Route("api/stats")]
 public class StatsController(AppDbContext db) : ControllerBase

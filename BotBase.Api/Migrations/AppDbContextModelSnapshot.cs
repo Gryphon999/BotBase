@@ -141,6 +141,12 @@ namespace BotBase.Api.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("CrmEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("CrmUntil")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("CrmWebhookUrl")
                         .HasColumnType("text");
 
@@ -150,6 +156,10 @@ namespace BotBase.Api.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("MessagesLanguage")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<long?>("OwnerNotificationChatId")
                         .HasColumnType("bigint");

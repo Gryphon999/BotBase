@@ -43,7 +43,7 @@ public class BotReplyService(
             .OrderBy(s => s.DayOfWeek)
             .ToListAsync(ct);
 
-        var masters = await db.Masters.Include(m => m.Procedures)
+        var masters = !business.HasCrm(BusinessClock.Now(business.TimeZone)) ? [] : await db.Masters.Include(m => m.Procedures)
             .Where(m => m.BusinessId == businessId && m.IsActive)
             .OrderBy(m => m.CreatedAt)
             .ToListAsync(ct);

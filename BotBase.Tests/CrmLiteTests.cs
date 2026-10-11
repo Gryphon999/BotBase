@@ -62,6 +62,9 @@ public class CrmLiteTests(PostgresFixture pg)
         Guid id;
         using (var scope = app.Services.CreateScope())
             id = (await scope.ServiceProvider.GetRequiredService<AppDbContext>().Businesses.SingleAsync()).Id;
+        // Тариф «Бизнес»: CRM открывает админ.
+        var admin = app.CreateClient().WithToken(await app.CreateClient().AdminLoginAsync());
+        (await admin.PostAsJsonAsync($"api/admin/businesses/{id}/crm", new { enabled = true })).EnsureSuccessStatusCode();
         var salon = new Salon(app, api, id, manicure!, massage!);
         await salon.Say(Owner, "/start");
         return salon;

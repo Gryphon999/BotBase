@@ -1,0 +1,55 @@
+@* Админка: открыть/закрыть клиенту тариф «Бизнес» (CRM). «Оплачено до» — доступ закроется сам после этой даты. *@
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Rounded.WorkspacePremium" Color="Color.Primary" Class="mr-2" Style="vertical-align:middle" />Доступ к CRM — «@BusinessName»</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Class="bb-sub mb-4">Тариф «Бизнес»: напоминания, база клиентов, ручная запись, мастера, отзывы, статистика. Бот и календарь работают при любом тарифе.</MudText>
+        <MudRadioGroup T="string" @bind-Value="_mode">
+            <MudRadio T="string" Value="@("until")" Color="Color.Primary">Открыть до даты оплаты</MudRadio>
+            <MudRadio T="string" Value="@("forever")" Color="Color.Primary">Открыть бессрочно</MudRadio>
+            <MudRadio T="string" Value="@("closed")" Color="Color.Error">Закрыть (тариф «Старт»)</MudRadio>
+        </MudRadioGroup>
+        @if (_mode == "until")
+        {
+            <div class="d-flex flex-wrap gap-2 mt-3 mb-2">
+                <MudChip T="string" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Add(1)">+1 месяц</MudChip>
+                <MudChip T="string" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Add(3)">+3 месяца</MudChip>
+                <MudChip T="string" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => Add(12)">+1 год</MudChip>
+            </div>
+            <MudDatePicker @bind-Date="_until" Label="Оплачено до (включительно)" Variant="Variant.Outlined" DateFormat="dd.MM.yyyy"
+                           Culture="@(new System.Globalization.CultureInfo("ru-RU"))" FirstDayOfWeek="DayOfWeek.Monday" MinDate="DateTime.Today" />
+            <MudText Typo="Typo.body2" Class="bb-sub mt-2">После этой даты CRM закроется автоматически — продлевать будете вы, когда клиент оплатит.</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Отмена</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_mode == "until" && _until is null)"
+                   OnClick="Save">Сохранить</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string BusinessName { get; set; } = "";
+    [Parameter] public bool Enabled { get; set; }
+    [Parameter] public DateTime? Until { get; set; }
+
+    string _mode = "until";
+    DateTime? _until;
+
+    protected override void OnInitialized()
+    {
+        _mode = !Enabled ? "until" : Until is null ? "forever" : "until";
+        // Продление считаем от текущей даты окончания (если она ещё не прошла), иначе от сегодня.
+        _until = Until is { } u && u.Date >= DateTime.Today ? u.Date : DateTime.Today.AddMonths(1);
+    }
+
+    void Save() => MudDialog.Close(DialogResult.Ok((_mode != "closed", _mode == "until" ? _until : null)));
+
+    void Add(int months)
+    {
+        var from = Until is { } u && u.Date >= DateTime.Today ? u.Date : DateTime.Today;
+        _until = from.AddMonths(months);
+    }
+}
