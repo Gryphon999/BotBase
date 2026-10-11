@@ -4,7 +4,7 @@ namespace BotBase.Api.Services;
 
 public class TelegramService(IHttpClientFactory httpFactory)
 {
-    public async Task<string?> GetBotUsernameAsync(string token)
+    public virtual async Task<string?> GetBotUsernameAsync(string token)
     {
         try
         {
@@ -20,7 +20,7 @@ public class TelegramService(IHttpClientFactory httpFactory)
         }
     }
 
-    public async Task<bool> SetWebhookAsync(string token, string webhookUrl)
+    public virtual async Task<bool> SetWebhookAsync(string token, string webhookUrl)
     {
         var client = httpFactory.CreateClient();
         var resp = await client.GetAsync(
@@ -28,7 +28,7 @@ public class TelegramService(IHttpClientFactory httpFactory)
         return resp.IsSuccessStatusCode;
     }
 
-    public async Task SendMessageAsync(string token, long chatId, string text)
+    public virtual async Task SendMessageAsync(string token, long chatId, string text)
     {
         var client = httpFactory.CreateClient();
         await client.PostAsJsonAsync(

@@ -75,6 +75,7 @@
                 <MudMenuItem Icon="@Icons.Material.Rounded.HealthAndSafety" OnClick="() => CheckBot(context)" Disabled="!context.HasBot">Проверить бота</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Rounded.RestartAlt" OnClick="() => RestartBot(context)" Disabled="!context.HasBot">Перезапустить бота</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Rounded.Login" OnClick="() => Impersonate(context)">Войти как клиент</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Rounded.Password" OnClick="() => ResetPassword(context)">Сбросить пароль</MudMenuItem>
                 <MudDivider />
                 @if (context.IsActive)
                 {
@@ -148,6 +149,20 @@
         await Load();
     }
 
+    async Task ResetPassword(BusinessDto b)
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Сбросить пароль?",
+            $"Для «{b.BusinessName}» будет создан временный пароль, старый перестанет работать. Передайте новый пароль клиенту, после входа он сможет сменить его в разделе «Аккаунт».",
+            yesText: "Сбросить", cancelText: "Отмена");
+        if (ok != true) return;
+        var resp = await Api.AdminResetPasswordAsync(b.Id);
+        if (!resp.IsSuccessStatusCode) { Snackbar.Add("Не удалось сбросить пароль", Severity.Error); return; }
+        var temp = (await resp.Content.ReadFromJsonAsync<TempPasswordDto>())!.TemporaryPassword;
+        await Dialogs.ShowMessageBoxAsync("Временный пароль",
+            (MarkupString)$"<p>Email: <b>{System.Net.WebUtility.HtmlEncode(b.Email)}</b></p><p style='font-family:Consolas,monospace;font-size:1.5rem;font-weight:800;letter-spacing:.08em;margin:12px 0'>{temp}</p><p style='color:#64748B'>Пароль показывается один раз — скопируйте его сейчас.</p>",
+            yesText: "Готово");
+    }
+
     async Task Impersonate(BusinessDto b)
     {
         var resp = await Api.AdminImpersonateAsync(b.Id);
@@ -175,4 +190,5 @@
     record BotInfoDto(bool Connected, string? Username, bool TokenValid, string? WebhookUrl, int? Pending, string? LastError);
     record ImpersonateDto(string Token, string BusinessName);
     record ErrorDto(string Error);
+    record TempPasswordDto(string TemporaryPassword);
 }

@@ -74,6 +74,12 @@ public class ApiClient(HttpClient http)
     public Task<HttpResponseMessage> SetWebhookAsync(string? url) =>
         http.PutAsJsonAsync("api/integration/webhook", new { url });
 
+    // ---- Пароли ----
+    public Task<HttpResponseMessage> ForgotPasswordAsync(string email) => http.PostAsJsonAsync("api/auth/forgot-password", new { email });
+    public Task<HttpResponseMessage> ResetPasswordAsync(string token, string newPassword) => http.PostAsJsonAsync("api/auth/reset-password", new { token, newPassword });
+    public Task<HttpResponseMessage> ChangePasswordAsync(string currentPassword, string newPassword) => http.PostAsJsonAsync("api/auth/change-password", new { currentPassword, newPassword });
+    public Task<HttpResponseMessage> AdminResetPasswordAsync(Guid id) => http.PostAsync($"api/admin/businesses/{id}/reset-password", null);
+
     // ---- Главная ----
     public Task<HttpResponseMessage> GetDashboardAsync() => http.GetAsync("api/dashboard");
 

@@ -107,16 +107,20 @@ public class WebhookController(
             .OrderBy(s => s.DayOfWeek)
             .ToListAsync();
 
-        // Upcoming booked slots (next 7 days) to check conflicts
-        var until = DateTime.UtcNow.AddDays(7);
-        var bookedSlots = await db.Appointments
+        // Занятые слоты на 60 дней вперёд (раньше было 7 — ИИ не видел записи через неделю и обещал занятое время).
+        // ScheduledAt хранит время по часам бизнеса (см. ToWallClockUtc), поэтому выводим его без пересчёта.
+        var now = DateTime.UtcNow;
+        var until = now.AddDays(60);
+        var bookedSlots = (await db.Appointments
             .Where(a => a.BusinessId == businessId
-                     && a.ScheduledAt >= DateTime.UtcNow
+                     && a.ScheduledAt >= now
                      && a.ScheduledAt <= until
                      && a.Status != AppointmentStatus.Cancelled)
             .OrderBy(a => a.ScheduledAt)
-            .Select(a => $"{a.ScheduledAt:dd.MM HH:mm} — {a.ProcedureName} ({a.DurationMinutes} мин)")
-            .ToListAsync();
+            .Select(a => new { a.ScheduledAt, a.ProcedureName, a.DurationMinutes })
+            .ToListAsync())
+            .Select(a => $"{a.ScheduledAt:dd.MM.yyyy HH:mm}–{a.ScheduledAt.AddMinutes(a.DurationMinutes):HH:mm} — {a.ProcedureName}")
+            .ToList();
 
         var procedureList = procedures.Count == 0
             ? "Процедуры не настроены."
@@ -152,7 +156,7 @@ public class WebhookController(
             РАБОЧЕЕ РАСПИСАНИЕ:
             {{scheduleText}}
 
-            ЗАНЯТЫЕ СЛОТЫ (ближайшие 7 дней):
+            ЗАНЯТЫЕ СЛОТЫ (ближайшие 60 дней, на это время записывать НЕЛЬЗЯ):
             {{bookedText}}
 
             ИНСТРУКЦИЯ ПО ЗАПИСИ:
@@ -182,8 +186,9 @@ public class WebhookController(
         if (booking is not null)
         {
             var cleanReply = rawReply.Replace(booking.Value.FullMatch, "").Trim();
-            await TryCreateAppointmentAsync(businessId, conversationId, booking.Value.Json);
-            return cleanReply;
+            // Сервер — последняя инстанция: если запись не создана, ответ ИИ «вы записаны» клиенту не уходит.
+            var rejection = await TryCreateAppointmentAsync(businessId, conversationId, booking.Value.Json);
+            return rejection ?? cleanReply;
         }
 
         return rawReply;
@@ -203,52 +208,88 @@ public class WebhookController(
         return (json, fullMatch);
     }
 
-    private async Task TryCreateAppointmentAsync(Guid businessId, Guid conversationId, string json)
+    // Создаёт запись из маркера [[BOOK:...]]. Возвращает null, если запись создана,
+    // иначе — честное сообщение клиенту (занято / нерабочее время / не хватает данных).
+    private async Task<string?> TryCreateAppointmentAsync(Guid businessId, Guid conversationId, string json)
     {
+        BookingData? data;
         try
         {
-            var data = JsonSerializer.Deserialize<BookingData>(json,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (data is null) return;
+            data = JsonSerializer.Deserialize<BookingData>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException)
+        {
+            data = null;
+        }
 
-            if (string.IsNullOrWhiteSpace(data.procedure_name) ||
-                string.IsNullOrWhiteSpace(data.client_name) ||
-                string.IsNullOrWhiteSpace(data.client_phone) ||
-                string.IsNullOrWhiteSpace(data.scheduled_at) ||
-                data.duration_minutes <= 0)
-                return;
+        if (data is null ||
+            string.IsNullOrWhiteSpace(data.procedure_name) ||
+            string.IsNullOrWhiteSpace(data.client_name) ||
+            string.IsNullOrWhiteSpace(data.client_phone) ||
+            string.IsNullOrWhiteSpace(data.scheduled_at) ||
+            data.duration_minutes <= 0 ||
+            !DateTimeOffset.TryParse(data.scheduled_at, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed))
+        {
+            return "Не получилось оформить запись: уточните, пожалуйста, процедуру, дату и время, имя и телефон.";
+        }
 
-            if (!DateTime.TryParse(data.scheduled_at, out var parsedAt)) return;
+        // Время по часам бизнеса — так, как его назвал клиент (смещение часового пояса игнорируем).
+        var wallClock = parsed.DateTime;
+        var scheduledAt = ToWallClockUtc(wallClock);
+        var apptEnd = scheduledAt.AddMinutes(data.duration_minutes);
 
-            // parsedAt — "as entered" time (local), used for schedule comparison
-            // scheduledAt — UTC, used for storage and overlap queries
-            var scheduleTime = TimeOnly.FromTimeSpan(parsedAt.TimeOfDay);
-            var scheduledAt = parsedAt.Kind == DateTimeKind.Utc ? parsedAt : parsedAt.ToUniversalTime();
+        var isoDay = ((int)wallClock.DayOfWeek + 6) % 7; // БД: 0=Пн..6=Вс
+        var daySchedule = await db.WorkSchedules
+            .FirstOrDefaultAsync(s => s.BusinessId == businessId && s.DayOfWeek == isoDay);
+        if (daySchedule is not { IsWorkingDay: true, StartTime: { } open, EndTime: { } close })
+            return $"К сожалению, {wallClock:dd.MM} у нас выходной. Подскажите, пожалуйста, другой день.";
 
-            // Check working day (DB: 0=Mon..6=Sun; .NET DayOfWeek: 0=Sun..6=Sat)
-            var isoDay = ((int)parsedAt.DayOfWeek + 6) % 7;
-            var daySchedule = await db.WorkSchedules
-                .FirstOrDefaultAsync(s => s.BusinessId == businessId && s.DayOfWeek == isoDay);
+        var start = TimeOnly.FromDateTime(wallClock);
+        if (start < open || start.AddMinutes(data.duration_minutes) > close || start.AddMinutes(data.duration_minutes) < start)
+            return $"К сожалению, {wallClock:dd.MM} мы работаем с {open:HH\\:mm} до {close:HH\\:mm}, " +
+                   $"а процедура длится {data.duration_minutes} мин. Выберите, пожалуйста, время в эти часы.";
 
-            if (daySchedule is null || !daySchedule.IsWorkingDay ||
-                daySchedule.StartTime is null || daySchedule.EndTime is null)
-                return;
+        if (scheduledAt < ToWallClockUtc(DateTime.UtcNow))
+            return "Это время уже прошло. Подскажите, пожалуйста, другую дату или время.";
 
-            // Check appointment fits within working hours
-            var apptEndTime = scheduleTime.Add(TimeSpan.FromMinutes(data.duration_minutes));
-            if (scheduleTime < daySchedule.StartTime || apptEndTime > daySchedule.EndTime)
-                return;
+        Appointment appt;
+        // Блокировка на бизнес: проверка «свободно?» и сохранение идут атомарно,
+        // иначе два одновременных сообщения оба проходят проверку (гонка).
+        await using (var tx = await db.Database.BeginTransactionAsync())
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({LockKey(businessId)})");
 
-            // Check for overlapping appointments: conflict if intervals intersect
-            var apptEnd = scheduledAt.AddMinutes(data.duration_minutes);
-            var conflict = await db.Appointments.AnyAsync(a =>
-                a.BusinessId == businessId &&
-                a.Status != AppointmentStatus.Cancelled &&
-                a.ScheduledAt < apptEnd &&
-                a.ScheduledAt.AddMinutes(a.DurationMinutes) > scheduledAt);
-            if (conflict) return;
+            var dayStart = ToWallClockUtc(wallClock.Date);
+            var dayAppointments = await db.Appointments
+                .Where(a => a.BusinessId == businessId
+                         && a.Status != AppointmentStatus.Cancelled
+                         && a.ScheduledAt >= dayStart.AddDays(-1)
+                         && a.ScheduledAt < dayStart.AddDays(1))
+                .Select(a => new { a.ScheduledAt, a.DurationMinutes })
+                .ToListAsync();
 
-            var appt = new Appointment
+            bool Busy(DateTime from, DateTime to) =>
+                dayAppointments.Any(a => a.ScheduledAt < to && a.ScheduledAt.AddMinutes(a.DurationMinutes) > from);
+
+            if (Busy(scheduledAt, apptEnd))
+            {
+                var free = new List<string>();
+                for (var t = open; t.AddMinutes(data.duration_minutes) <= close && t.AddMinutes(data.duration_minutes) > t; t = t.AddMinutes(30))
+                {
+                    var from = dayStart.Add(t.ToTimeSpan());
+                    if (from >= ToWallClockUtc(DateTime.UtcNow) && !Busy(from, from.AddMinutes(data.duration_minutes)))
+                        free.Add(t.ToString("HH:mm"));
+                }
+                var nearest = free
+                    .OrderBy(f => Math.Abs((TimeOnly.Parse(f) - start).TotalMinutes))
+                    .Take(4).OrderBy(f => f).ToList();
+                return nearest.Count == 0
+                    ? $"К сожалению, {wallClock:dd.MM} в {wallClock:HH:mm} уже занято, и свободного времени в этот день не осталось. Подскажите, пожалуйста, другой день."
+                    : $"К сожалению, {wallClock:dd.MM} в {wallClock:HH:mm} уже занято. Свободное время в этот день: {string.Join(", ", nearest)}. Какое вам подходит?";
+            }
+
+            appt = new Appointment
             {
                 Id              = Guid.NewGuid(),
                 BusinessId      = businessId,
@@ -262,7 +303,11 @@ public class WebhookController(
             };
             db.Appointments.Add(appt);
             await db.SaveChangesAsync();
+            await tx.CommitAsync();
+        }
 
+        try
+        {
             var business = await db.Businesses.FindAsync(businessId);
 
             if (business?.CrmWebhookUrl is { } url)
@@ -274,16 +319,23 @@ public class WebhookController(
                           $"Клиент: {appt.ClientName}\n" +
                           $"Телефон: {appt.ClientPhone}\n" +
                           $"Процедура: {appt.ProcedureName}\n" +
-                          $"Дата и время: {parsedAt:dd.MM.yyyy HH:mm}\n" +
+                          $"Дата и время: {wallClock:dd.MM.yyyy HH:mm}\n" +
                           $"Длительность: {appt.DurationMinutes} мин";
                 await telegram.SendMessageAsync(botToken, ownerId, msg);
             }
         }
         catch
         {
-            // Booking parsing or validation failed silently — reply still sent to user
+            // Запись уже сохранена; сбой уведомления не должен ломать ответ клиенту.
         }
+        return null;
     }
+
+    // Соглашение BotBase: ScheduledAt хранит время по часам бизнеса, помеченное как UTC
+    // (как было на Railway с самого начала). Никаких пересчётов часовых поясов — ни на сервере, ни в браузере.
+    private static DateTime ToWallClockUtc(DateTime wallClock) => DateTime.SpecifyKind(wallClock, DateTimeKind.Utc);
+
+    private static long LockKey(Guid businessId) => BitConverter.ToInt64(businessId.ToByteArray(), 0);
 
     private record BookingData(
         string procedure_name,

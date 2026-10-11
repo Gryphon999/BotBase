@@ -5,3 +5,8 @@ obj/
 *.suo
 appsettings.Development.json
 backups/*.sql.gz
+
+# Любые дампы базы — только локально (репозиторий публичный)
+backups/*.sql
+backups/*.sql.gz
+backups/*.gpg

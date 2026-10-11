@@ -93,7 +93,7 @@
                     <MudTh>Действия</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd>@context.ScheduledAt.ToLocalTime().ToString("HH:mm")</MudTd>
+                    <MudTd>@context.ScheduledAt.ToString("HH:mm")</MudTd>
                     <MudTd>@context.ProcedureName</MudTd>
                     <MudTd>@context.ClientName</MudTd>
                     <MudTd>@context.ClientPhone</MudTd>
@@ -139,11 +139,11 @@
     }
 
     int AppointmentCountFor(DateTime date) =>
-        _monthAppointments.Count(a => a.ScheduledAt.ToLocalTime().Date == date.Date);
+        _monthAppointments.Count(a => a.ScheduledAt.Date == date.Date);
 
     List<AppointmentDto> AppointmentsFor(DateTime date) =>
         _monthAppointments
-            .Where(a => a.ScheduledAt.ToLocalTime().Date == date.Date)
+            .Where(a => a.ScheduledAt.Date == date.Date)
             .OrderBy(a => a.ScheduledAt)
             .ToList();
 
