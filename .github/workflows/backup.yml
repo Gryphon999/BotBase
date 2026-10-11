@@ -29,8 +29,8 @@ jobs:
         run: |
           set -euo pipefail
           NAME="botbase_$(date -u +%Y%m%d_%H%M%S)"
-          # pg_dump новее сервера работает со старыми версиями PostgreSQL
-          docker run --rm postgres:17-alpine pg_dump "$DATABASE_URL" --no-owner --no-privileges > "$NAME.sql"
+          # pg_dump должен быть не старше сервера (на Railway сейчас PostgreSQL 18)
+          docker run --rm postgres:18-alpine pg_dump "$DATABASE_URL" --no-owner --no-privileges > "$NAME.sql"
           TABLES=$(grep -c '^CREATE TABLE' "$NAME.sql" || true)
           echo "Tables in dump: $TABLES"
           if [ "$TABLES" -lt 7 ]; then echo "::error::Дамп подозрительно пустой ($TABLES таблиц)"; exit 1; fi
