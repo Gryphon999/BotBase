@@ -39,6 +39,7 @@ public class AppointmentsController(AppDbContext db, CrmWebhookService webhook) 
         if (month is not null && DateTime.TryParseExact(month, "yyyy-MM",
                 null, System.Globalization.DateTimeStyles.None, out var monthStart))
         {
+            monthStart = DateTime.SpecifyKind(monthStart, DateTimeKind.Utc);
             var monthEnd = monthStart.AddMonths(1);
             query = query.Where(a => a.ScheduledAt >= monthStart && a.ScheduledAt < monthEnd);
         }

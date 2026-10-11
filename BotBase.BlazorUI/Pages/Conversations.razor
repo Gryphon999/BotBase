@@ -3,10 +3,9 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<MudText Typo="Typo.h4" Class="mb-2">Разговоры</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-5">
-    История всех диалогов клиентов с вашим ботом. Кликните на строку, чтобы открыть полную переписку.
-</MudText>
+<PageTitle>Разговоры · BotBase</PageTitle>
+
+<PageHeader Title="Разговоры" Description="История всех диалогов клиентов с вашим ботом. Кликните на строку, чтобы открыть полную переписку." />
 
 @if (_conversations is null)
 {
@@ -28,7 +27,7 @@ else
         </HeaderContent>
         <RowTemplate>
             <MudTd>@context.TelegramChatId</MudTd>
-            <MudTd>@context.StartedAt.ToString("dd.MM.yyyy HH:mm")</MudTd>
+            <MudTd>@context.StartedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</MudTd>
         </RowTemplate>
     </MudTable>
 }
