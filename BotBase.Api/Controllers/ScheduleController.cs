@@ -27,6 +27,19 @@ public class ScheduleController(AppDbContext db) : ControllerBase
                 EndTime = s.EndTime.HasValue ? s.EndTime.Value.ToString("HH:mm") : null
             })
             .ToListAsync();
+
+        // Аккаунты, созданные до появления расписания (август 2026), не имеют строк вовсе:
+        // страница была пустой, а сохранить пустую таблицу нельзя (нужно 7 дней). Показываем стандартное
+        // расписание Пн–Пт 09:00–18:00 — после «Сохранить» оно запишется в базу.
+        if (schedule.Count == 0)
+            return Ok(Enumerable.Range(0, 7).Select(day => new
+            {
+                DayOfWeek = day,
+                IsWorkingDay = day < 5,
+                StartTime = day < 5 ? "09:00" : null,
+                EndTime = day < 5 ? "18:00" : null
+            }));
+
         return Ok(schedule);
     }
 

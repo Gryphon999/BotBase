@@ -53,10 +53,11 @@
         }
         else
         {
-            _error = "Этот email уже зарегистрирован";
+            _error = (await resp.Content.ReadFromJsonAsync<ErrorResponse>())?.Error ?? "Не удалось зарегистрироваться";
         }
         _loading = false;
     }
 
     record LoginResponse(string Token, string BusinessName);
+    record ErrorResponse(string Error);
 }
