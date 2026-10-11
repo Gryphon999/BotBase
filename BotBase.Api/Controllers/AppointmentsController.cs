@@ -104,7 +104,7 @@ public class AppointmentsController(AppDbContext db, CrmWebhookService webhook, 
             DurationMinutes: req.DurationMinutes, ProcedureId: req.ProcedureId, MasterId: req.MasterId,
             IgnoreWorkingHours: req.IgnoreWorkingHours));
         if (result.Appointment is not { } appt)
-            return Conflict(new { error = result.Error, freeTimes = result.FreeTimes });
+            return Conflict(new { error = ForOwner(result.Error), freeTimes = result.FreeTimes });
 
         await FireWebhookAsync(businessId, "appointment.created", appt);
         if (req.NotifyClient)
@@ -125,7 +125,7 @@ public class AppointmentsController(AppDbContext db, CrmWebhookService webhook, 
 
         var result = await booking.RescheduleAsync(appt, req.ScheduledAt, req.MasterId, req.IgnoreWorkingHours);
         if (result.Appointment is null)
-            return Conflict(new { error = result.Error, freeTimes = result.FreeTimes });
+            return Conflict(new { error = ForOwner(result.Error), freeTimes = result.FreeTimes });
 
         await FireWebhookAsync(businessId, "appointment.updated", appt);
         if (req.NotifyClient)
@@ -183,6 +183,10 @@ public class AppointmentsController(AppDbContext db, CrmWebhookService webhook, 
         await db.SaveChangesAsync();
         return NoContent();
     }
+
+    // Тексты отказа написаны для клиента бота; владельцу в кабинете вопрос «Какое вам подходит?» не нужен.
+    static string? ForOwner(string? error) => error?.Replace(" Какое вам подходит?", "").Replace(" Подскажите, пожалуйста, другой день.", "").Replace(" Выберите, пожалуйста, время в эти часы.", "")
+        .Replace(" Подскажите, пожалуйста, другую дату или время.", "");
 
     private async Task FireWebhookAsync(Guid businessId, string eventName, Appointment appt)
     {

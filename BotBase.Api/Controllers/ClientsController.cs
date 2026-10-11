@@ -45,7 +45,10 @@ public class ClientsController(AppDbContext db, BookingService booking) : Contro
             .Select(c => new ClientListItem(c.Id, c.Name, c.Phone, c.HasTelegram, c.Visits.Count,
                 c.Visits.Count == 0 ? null : c.Visits.Max(v => v.ScheduledAt), c.Next,
                 c.Visits.Sum(v => v.Price ?? 0), c.Notes))
-            .OrderByDescending(c => c.NextVisit ?? c.LastVisit ?? DateTime.MinValue));
+            // Сначала те, у кого запись ближе всего; дальше — по давности последнего визита.
+            .OrderBy(c => c.NextVisit is null)
+            .ThenBy(c => c.NextVisit)
+            .ThenByDescending(c => c.LastVisit));
     }
 
     [HttpGet("{id:guid}")]

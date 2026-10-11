@@ -1,0 +1,88 @@
+@page "/masters"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>Мастера · BotBase</PageTitle>
+
+<PageHeader Title="Мастера" Description="Если у вас несколько мастеров, добавьте их: бот будет записывать к свободному мастеру, который делает нужную процедуру, и клиент сможет выбрать мастера сам.">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.PersonAdd" OnClick="() => Open(null)">Добавить мастера</MudButton>
+    </Actions>
+</PageHeader>
+
+@if (_masters is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_masters.Count == 0)
+{
+    <MudPaper Class="pa-6 bb-fade-in">
+        <MudText Typo="Typo.h6" Class="mb-2">Вы работаете один?</MudText>
+        <MudText Class="bb-sub">
+            Тогда ничего добавлять не нужно — бот записывает по общему расписанию, и в одно время возможна только одна запись.
+            Добавьте мастеров, если клиентов принимают несколько человек одновременно.
+        </MudText>
+    </MudPaper>
+}
+else
+{
+    <MudGrid Spacing="3">
+        @foreach (var m in _masters)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="pa-4 bb-fade-in" Style="cursor:pointer;height:100%" @onclick="() => Open(m)">
+                    <div class="d-flex align-center gap-3 mb-3">
+                        <div class="bb-avatar" style="width:42px;height:42px">@m.Name[..1].ToUpper()</div>
+                        <MudText Typo="Typo.h6">@m.Name</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Class="bb-sub mb-1">Процедуры</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-3">
+                        @(m.ProcedureIds.Count == 0 ? "Все процедуры" : string.Join(", ", _procedures.Where(p => m.ProcedureIds.Contains(p.Id)).Select(p => p.Name)))
+                    </MudText>
+                    <MudText Typo="Typo.body2" Class="bb-sub mb-1">График</MudText>
+                    <MudText Typo="Typo.body2">@ScheduleText(m)</MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    List<MasterItem>? _masters;
+    List<ProcedureItem> _procedures = [];
+    static readonly string[] Short = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await Api.EnsureSignedInAsync(JS, Nav)) return;
+        _procedures = await Api.GetProcedureListAsync();
+        await Load();
+    }
+
+    async Task Load() => _masters = await Api.GetMastersAsync();
+
+    static string ScheduleText(MasterItem m)
+    {
+        if (m.Schedule is null) return "Общее расписание бизнеса";
+        var work = m.Schedule.Where(s => s.IsWorkingDay).ToList();
+        if (work.Count == 0) return "Не работает";
+        // Одинаковые часы группируем: «Пн, Вт, Ср 10:00–19:00».
+        return string.Join("; ", work.GroupBy(s => $"{s.StartTime}–{s.EndTime}")
+            .Select(g => $"{string.Join(", ", g.Select(s => Short[s.DayOfWeek]))} {g.Key}"));
+    }
+
+    async Task Open(MasterItem? master)
+    {
+        var dialog = await Dialogs.ShowAsync<MasterDialog>(master?.Name ?? "Новый мастер",
+            new DialogParameters<MasterDialog> { { x => x.Master, master }, { x => x.Procedures, _procedures } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+        if (await dialog.Result is { Canceled: false, Data: string what })
+        {
+            Snackbar.Add(what == "deleted" ? "Мастер удалён" : "Сохранено", Severity.Success);
+            await Load();
+        }
+    }
+}

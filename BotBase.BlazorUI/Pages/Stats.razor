@@ -1,0 +1,124 @@
+@page "/stats"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<PageTitle>Статистика · BotBase</PageTitle>
+
+<PageHeader Title="Статистика" Description="Сколько записей за месяц, сколько из них сделал бот, выручка, неявки и самые популярные услуги.">
+    <Actions>
+        <MudPaper Class="d-flex align-center px-1 py-1" Style="border-radius:999px">
+            <MudIconButton Icon="@Icons.Material.Rounded.ChevronLeft" OnClick="() => Shift(-1)" Size="Size.Small" />
+            <MudText Typo="Typo.subtitle1" Style="min-width:160px;text-align:center;text-transform:capitalize">@_month.ToString("MMMM yyyy", Ru)</MudText>
+            <MudIconButton Icon="@Icons.Material.Rounded.ChevronRight" OnClick="() => Shift(1)" Size="Size.Small" />
+        </MudPaper>
+    </Actions>
+</PageHeader>
+
+@if (_s is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    @if (_s.ByBot > 0)
+    {
+        <div class="bb-hero-stat bb-fade-in mb-5">
+            <MudIcon Icon="@Icons.Material.Rounded.SmartToy" Style="font-size:2.2rem" />
+            <div>
+                <div class="bb-hero-stat-title">Бот записал @_s.ByBot @Plural(_s.ByBot, "клиента", "клиентов", "клиентов") из @_s.Total</div>
+                <div class="bb-hero-stat-sub">
+                    @(_s.Total == 0 ? 0 : Math.Round(100.0 * _s.ByBot / _s.Total))% всех записей месяца@(_s.BotRevenue > 0 ? $" · принёс {Fmt.Money(_s.BotRevenue)} выручки" : "")
+                </div>
+            </div>
+        </div>
+    }
+
+    <MudGrid Spacing="3" Class="mb-2">
+        <MudItem xs="6" md="3"><StatCard Label="Записей" Value="@_s.Total.ToString()" Icon="@Icons.Material.Rounded.EventNote" Hint="@($"{_s.Upcoming} ещё впереди")" /></MudItem>
+        <MudItem xs="6" md="3"><StatCard Label="Выручка" Value="@Fmt.Money(_s.Revenue)" Icon="@Icons.Material.Rounded.Payments" Color="#10B981" Hint="@($"{_s.Visits} визитов")" /></MudItem>
+        <MudItem xs="6" md="3"><StatCard Label="Средний чек" Value="@Fmt.Money(_s.AverageCheck)" Icon="@Icons.Material.Rounded.Receipt" Color="#0EA5E9" /></MudItem>
+        <MudItem xs="6" md="3"><StatCard Label="Новые клиенты" Value="@_s.NewClients.ToString()" Icon="@Icons.Material.Rounded.PersonAdd" Color="#F59E0B" Hint="@($"всего клиентов в месяце: {_s.Clients}")" /></MudItem>
+        <MudItem xs="6" md="3"><StatCard Label="Подтвердили по напоминанию" Value="@_s.ConfirmedByReminder.ToString()" Icon="@Icons.Material.Rounded.NotificationsActive" Color="#8B5CF6" /></MudItem>
+        <MudItem xs="6" md="3"><StatCard Label="Неявки" Value="@_s.NoShows.ToString()" Icon="@Icons.Material.Rounded.PersonOff" Color="#64748B" /></MudItem>
+        <MudItem xs="6" md="3"><StatCard Label="Отмены" Value="@_s.Cancelled.ToString()" Icon="@Icons.Material.Rounded.EventBusy" Color="#EF4444" /></MudItem>
+        <MudItem xs="6" md="3"><StatCard Label="Оценка клиентов" Value="@(_s.AverageRating is { } r ? $"{r:0.0} ⭐" : "—")" Icon="@Icons.Material.Rounded.Star" Color="#EAB308" Hint="@(_s.RatingsCount > 0 ? $"{_s.RatingsCount} оценок" : "включите просьбу об отзыве")" /></MudItem>
+    </MudGrid>
+
+    <MudPaper Class="pa-5 mt-4">
+        <MudText Typo="Typo.h6" Class="mb-3">Записи по дням</MudText>
+        @{ var max = Math.Max(1, _s.ByDay.Max(d => d.Count)); }
+        <div class="bb-bars">
+            @foreach (var d in _s.ByDay)
+            {
+                <MudTooltip Text="@($"{d.Day} {_month.ToString("MMMM", Ru)}: {d.Count}")">
+                    <div class="bb-bar-col">
+                        <div class="bb-bar" style="height:@(d.Count * 100 / max)%"></div>
+                        <div class="bb-bar-label">@(d.Day % 5 == 1 || d.Day == _s.ByDay.Count ? d.Day.ToString() : "")</div>
+                    </div>
+                </MudTooltip>
+            }
+        </div>
+    </MudPaper>
+
+    <MudGrid Spacing="3" Class="mt-1">
+        <MudItem xs="12" md="@(_s.ByMaster.Count > 0 ? 7 : 12)">
+            <MudPaper Class="pa-5" Style="height:100%">
+                <MudText Typo="Typo.h6" Class="mb-3">Популярные услуги</MudText>
+                @if (_s.TopProcedures.Count == 0)
+                {
+                    <MudText Class="bb-sub">Записей пока нет.</MudText>
+                }
+                @foreach (var p in _s.TopProcedures)
+                {
+                    <div class="mb-3">
+                        <div class="d-flex justify-space-between"><span>@p.Name</span><span class="bb-sub">@p.Count · @Fmt.Money(p.Revenue)</span></div>
+                        <MudProgressLinear Value="@(100.0 * p.Count / _s.TopProcedures[0].Count)" Color="Color.Primary" Rounded="true" Size="Size.Medium" />
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+        @if (_s.ByMaster.Count > 0)
+        {
+            <MudItem xs="12" md="5">
+                <MudPaper Class="pa-5" Style="height:100%">
+                    <MudText Typo="Typo.h6" Class="mb-3">Загрузка мастеров</MudText>
+                    @foreach (var m in _s.ByMaster)
+                    {
+                        <div class="d-flex justify-space-between py-2" style="border-bottom:1px solid var(--bb-line)">
+                            <span style="font-weight:600">@m.Name</span><span class="bb-sub">@m.Count @Plural(m.Count, "запись", "записи", "записей") · @Fmt.Money(m.Revenue)</span>
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+    <MudText Typo="Typo.caption" Class="bb-sub mt-3 d-block">Выручка считается по ценам из прайса на момент записи; отменённые записи и неявки не учитываются.</MudText>
+}
+
+@code {
+    static readonly System.Globalization.CultureInfo Ru = new("ru-RU");
+    DateTime _month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    StatsData? _s;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await Api.EnsureSignedInAsync(JS, Nav)) return;
+        await Load();
+    }
+
+    async Task Load()
+    {
+        _s = null;
+        _s = await Api.GetStatsAsync(_month.ToString("yyyy-MM"));
+    }
+
+    async Task Shift(int months)
+    {
+        _month = _month.AddMonths(months);
+        await Load();
+    }
+
+    static string Plural(int n, string one, string few, string many) =>
+        (n % 10 == 1 && n % 100 != 11) ? one : (n % 10 is >= 2 and <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? few : many;
+}

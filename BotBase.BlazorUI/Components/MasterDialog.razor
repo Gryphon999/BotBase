@@ -1,0 +1,113 @@
+@* Добавление/редактирование мастера: имя, процедуры, расписание (общее или своё). *@
+@inject ApiClient Api
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Rounded.Badge" Class="mr-2" Style="vertical-align:middle" />@(Master is null ? "Новый мастер" : Master.Name)</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="Имя мастера" Variant="Variant.Outlined" Class="mb-4" Placeholder="Например: Анна" />
+
+        <MudText Typo="Typo.subtitle2" Class="mb-1" Style="font-weight:700">Какие процедуры делает</MudText>
+        <MudText Typo="Typo.body2" Class="bb-sub mb-2">Ничего не выбрано — все процедуры.</MudText>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+            @foreach (var p in Procedures)
+            {
+                var selected = _procedureIds.Contains(p.Id);
+                <MudChip T="string" Color="@(selected ? Color.Primary : Color.Default)" Variant="@(selected ? Variant.Filled : Variant.Outlined)"
+                         OnClick="() => Toggle(p.Id)" Icon="@(selected ? Icons.Material.Rounded.Check : null)">@p.Name</MudChip>
+            }
+        </div>
+
+        <MudSwitch @bind-Value="_ownSchedule" Color="Color.Primary" Label="Свой график работы (иначе — общее расписание бизнеса)" />
+        @if (_ownSchedule)
+        {
+            <MudSimpleTable Dense="true" Elevation="0" Class="mt-2">
+                <tbody>
+                    @foreach (var row in _schedule)
+                    {
+                        <tr>
+                            <td style="width:34%">@Fmt.Weekday(row.DayOfWeek)</td>
+                            <td><MudSwitch @bind-Value="row.IsWorkingDay" Color="Color.Primary" Dense="true" /></td>
+                            <td><MudTimePicker @bind-Time="row.Start" AmPm="false" Disabled="!row.IsWorkingDay" Variant="Variant.Text" Margin="Margin.Dense" /></td>
+                            <td><MudTimePicker @bind-Time="row.End" AmPm="false" Disabled="!row.IsWorkingDay" Variant="Variant.Text" Margin="Margin.Dense" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+        @if (_error is not null) { <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert> }
+    </DialogContent>
+    <DialogActions>
+        @if (Master is not null)
+        {
+            <MudButton Color="Color.Error" StartIcon="@Icons.Material.Rounded.Delete" OnClick="Delete">Удалить</MudButton>
+            <MudSpacer />
+        }
+        <MudButton OnClick="() => MudDialog.Cancel()">Отмена</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving || string.IsNullOrWhiteSpace(_name)">Сохранить</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Inject] IDialogService Dialogs { get; set; } = default!;
+    [Parameter] public MasterItem? Master { get; set; }
+    [Parameter] public List<ProcedureItem> Procedures { get; set; } = [];
+
+    class Row { public int DayOfWeek; public bool IsWorkingDay; public TimeSpan? Start; public TimeSpan? End; }
+
+    string _name = "";
+    string? _error;
+    bool _ownSchedule, _saving;
+    HashSet<Guid> _procedureIds = [];
+    List<Row> _schedule = [];
+
+    protected override void OnInitialized()
+    {
+        _name = Master?.Name ?? "";
+        _procedureIds = Master?.ProcedureIds.ToHashSet() ?? [];
+        _ownSchedule = Master?.Schedule is not null;
+        _schedule = Enumerable.Range(0, 7).Select(d =>
+        {
+            var s = Master?.Schedule?.FirstOrDefault(x => x.DayOfWeek == d);
+            return new Row
+            {
+                DayOfWeek = d,
+                IsWorkingDay = s?.IsWorkingDay ?? d < 5,
+                Start = s?.StartTime is { } st ? TimeSpan.Parse(st) : new TimeSpan(10, 0, 0),
+                End = s?.EndTime is { } en ? TimeSpan.Parse(en) : new TimeSpan(19, 0, 0)
+            };
+        }).ToList();
+    }
+
+    void Toggle(Guid id)
+    {
+        if (!_procedureIds.Remove(id)) _procedureIds.Add(id);
+    }
+
+    async Task Save()
+    {
+        _saving = true;
+        _error = null;
+        var schedule = _ownSchedule
+            ? _schedule.Select(r => new ScheduleDay(r.DayOfWeek, r.IsWorkingDay,
+                r.IsWorkingDay ? r.Start?.ToString(@"hh\:mm") : null, r.IsWorkingDay ? r.End?.ToString(@"hh\:mm") : null)).ToList()
+            : null;
+        var resp = Master is null
+            ? await Api.CreateMasterAsync(_name.Trim(), _procedureIds.ToList(), schedule)
+            : await Api.UpdateMasterAsync(Master.Id, _name.Trim(), _procedureIds.ToList(), schedule);
+        _saving = false;
+        if (resp.IsSuccessStatusCode) { MudDialog.Close(DialogResult.Ok("saved")); return; }
+        _error = (await ApiClient.ProblemAsync(resp)).Error;
+    }
+
+    async Task Delete()
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Удалить мастера?",
+            $"{Master!.Name} пропадёт из списка, и бот перестанет к нему записывать. Прошлые записи и статистика сохранятся.",
+            yesText: "Удалить", cancelText: "Отмена");
+        if (ok != true) return;
+        if ((await Api.DeleteMasterAsync(Master.Id)).IsSuccessStatusCode) MudDialog.Close(DialogResult.Ok("deleted"));
+    }
+}

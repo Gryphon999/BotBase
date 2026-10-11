@@ -123,3 +123,18 @@ a { color: var(--bb-accent); }
 .bb-kb-text mark { background: #EDE9FE; color: inherit; border-radius: 3px; padding: 0 2px; }
 .bb-kb-name { cursor: pointer; font-weight: 600; }
 .bb-kb-name:hover { color: var(--bb-accent); }
+
+/* CRM: статистика */
+.bb-hero-stat { display: flex; align-items: center; gap: 18px; padding: 20px 24px; border-radius: 18px; color: #fff; background: radial-gradient(500px 300px at 85% 0%, #7C6CFF, transparent 60%), linear-gradient(135deg, #4338CA, #6D5DFC); box-shadow: 0 12px 30px rgba(109, 93, 252, .35); }
+.bb-hero-stat-title { font-size: 1.25rem; font-weight: 800; letter-spacing: -.01em; }
+.bb-hero-stat-sub { opacity: .85; }
+.bb-bars { display: flex; align-items: flex-end; gap: 3px; height: 140px; }
+.bb-bars > * { flex: 1; height: 100%; }
+.bb-bar-col { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; }
+.bb-bar { background: linear-gradient(180deg, #A78BFA, #6D5DFC); border-radius: 4px 4px 0 0; min-height: 2px; transition: height .3s; }
+.bb-bar-label { font-size: .68rem; color: var(--bb-muted); text-align: center; height: 16px; }
+
+/* CRM: превью автосообщения (как в Telegram) */
+.bb-msg-preview { max-width: 460px; background: #EEF3F8; border-radius: 14px 14px 14px 4px; padding: 10px 14px; font-size: .9rem; line-height: 1.45; color: #0F172A; }
+.bb-msg-buttons { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.bb-msg-buttons span { flex: 1; text-align: center; background: rgba(255,255,255,.9); border-radius: 8px; padding: 6px 8px; font-weight: 600; font-size: .85rem; color: #2AABEE; min-width: 44px; }

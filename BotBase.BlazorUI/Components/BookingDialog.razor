@@ -1,0 +1,190 @@
+@* Новая запись из кабинета или перенос существующей (если передан Appointment). *@
+@inject ApiClient Api
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@(IsReschedule ? Icons.Material.Rounded.EventRepeat : Icons.Material.Rounded.EventAvailable)" Class="mr-2" Style="vertical-align:middle" />
+            @(IsReschedule ? "Перенести запись" : "Новая запись")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (IsReschedule)
+        {
+            <MudAlert Severity="Severity.Normal" Dense="true" Class="mb-4">
+                <b>@Appointment!.ClientName</b> · @Appointment.ProcedureName · сейчас: @Fmt.DayTime(Appointment.ScheduledAt)
+            </MudAlert>
+        }
+        else
+        {
+            <div class="d-flex gap-3 flex-wrap">
+                <MudTextField T="string" Value="_name" ValueChanged="OnNameChanged" Label="Имя клиента" Variant="Variant.Outlined" Immediate="true" DebounceInterval="250"
+                              Style="flex:1;min-width:180px" AdornmentIcon="@Icons.Material.Rounded.Person" Adornment="Adornment.Start" />
+                <MudTextField T="string" Value="_phone" ValueChanged="OnPhoneChanged" Label="Телефон" Variant="Variant.Outlined" Immediate="true" DebounceInterval="250"
+                              InputType="InputType.Telephone" Placeholder="+374 …" Style="flex:1;min-width:180px" />
+            </div>
+            @* Подсказки из базы: клик — подставить имя и телефон существующего клиента. *@
+            @if (_client is not null)
+            {
+                <MudText Typo="Typo.body2" Class="bb-sub mt-1 mb-3"><MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Color="Color.Success" Size="Size.Small" Style="vertical-align:middle" /> Клиент из базы · визитов: @_client.Visits</MudText>
+            }
+            else if (_suggestions.Count > 0)
+            {
+                <div class="d-flex flex-wrap gap-2 mt-1 mb-3 align-center">
+                    <MudText Typo="Typo.body2" Class="bb-sub">Есть в базе:</MudText>
+                    @foreach (var c in _suggestions)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Icon="@Icons.Material.Rounded.Person" OnClick="() => PickClient(c)">@c.Name · @c.Phone</MudChip>
+                    }
+                </div>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="bb-sub mt-1 mb-3">Новый клиент появится в базе автоматически.</MudText>
+            }
+
+            <MudSelect T="Guid?" @bind-Value="_procedureId" Label="Процедура" Variant="Variant.Outlined" Class="mb-3" AnchorOrigin="Origin.BottomCenter">
+                @foreach (var p in Procedures)
+                {
+                    <MudSelectItem T="Guid?" Value="@p.Id">@p.Name · @p.DurationMinutes мин · @Fmt.Money(p.Price)</MudSelectItem>
+                }
+            </MudSelect>
+        }
+
+        @if (Masters.Count > 0)
+        {
+            <MudSelect T="Guid?" @bind-Value="_masterId" Label="Мастер" Variant="Variant.Outlined" Class="mb-3" Clearable="true"
+                       Placeholder="Любой свободный" AnchorOrigin="Origin.BottomCenter">
+                @foreach (var m in MastersForProcedure)
+                {
+                    <MudSelectItem T="Guid?" Value="@m.Id">@m.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+
+        <div class="d-flex gap-3">
+            <MudDatePicker @bind-Date="_date" Label="Дата" Variant="Variant.Outlined" DateFormat="dd.MM.yyyy" Culture="@Ru" FirstDayOfWeek="DayOfWeek.Monday" Style="flex:1" />
+            <MudTimePicker @bind-Time="_time" Label="Время" Variant="Variant.Outlined" AmPm="false" Style="flex:1" />
+        </div>
+
+        <MudCheckBox @bind-Value="_ignoreHours" Color="Color.Primary" Dense="true" Class="mt-2" Label="Вне рабочего времени (разрешить)" />
+        <MudCheckBox @bind-Value="_notify" Color="Color.Primary" Dense="true" Label="Сообщить клиенту в Telegram (если он писал боту)" />
+
+        @if (_problem is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-3">@_problem.Error</MudAlert>
+            @if (_problem.FreeTimes is { Count: > 0 } free)
+            {
+                <MudText Typo="Typo.body2" Class="bb-sub mt-2 mb-1">Свободно в этот день:</MudText>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var t in free)
+                    {
+                        <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" OnClick="() => PickTime(t)">@t</MudChip>
+                    }
+                </div>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Отмена</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_saving || !Valid">
+            @(_saving ? "Сохраняем…" : IsReschedule ? "Перенести" : "Записать")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    static readonly System.Globalization.CultureInfo Ru = new("ru-RU");
+
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public List<ProcedureItem> Procedures { get; set; } = [];
+    [Parameter] public List<MasterItem> Masters { get; set; } = [];
+    [Parameter] public DateTime? Date { get; set; }
+    [Parameter] public ClientItem? Client { get; set; }
+    [Parameter] public AppointmentItem? Appointment { get; set; }
+
+    bool IsReschedule => Appointment is not null;
+    ClientItem? _client;
+    string _name = "", _phone = "";
+    Guid? _procedureId, _masterId;
+    DateTime? _date;
+    TimeSpan? _time = new(10, 0, 0);
+    bool _ignoreHours, _notify = true, _saving;
+    BookingProblem? _problem;
+
+    List<ClientItem> _suggestions = [];
+
+    protected override void OnInitialized()
+    {
+        _client = Client;
+        _name = Client?.Name ?? "";
+        _phone = Client?.Phone ?? "";
+        _date = (Appointment?.ScheduledAt ?? Date ?? DateTime.Today).Date;
+        if (Appointment is not null)
+        {
+            _time = Appointment.ScheduledAt.TimeOfDay;
+            _masterId = Appointment.MasterId;
+        }
+        _procedureId = Procedures.Count == 1 ? Procedures[0].Id : null;
+    }
+
+    IEnumerable<MasterItem> MastersForProcedure
+    {
+        get
+        {
+            var pid = IsReschedule ? Procedures.FirstOrDefault(p => p.Name == Appointment!.ProcedureName)?.Id : _procedureId;
+            return Masters.Where(m => pid is null || m.ProcedureIds.Count == 0 || m.ProcedureIds.Contains(pid.Value));
+        }
+    }
+
+    string ClientName => _name;
+    string ClientPhone => _phone;
+
+    bool Valid => _date is not null && _time is not null &&
+                  (IsReschedule || (!string.IsNullOrWhiteSpace(ClientName) && ClientPhone.Count(char.IsDigit) >= 5 && _procedureId is not null));
+
+    // Пока владелец печатает имя или телефон — ищем совпадения в базе; правка полей «отвязывает» выбранного клиента.
+    async Task OnNameChanged(string value)
+    {
+        _name = value;
+        if (_client is not null && _client.Name != value) _client = null;
+        await Suggest(value);
+    }
+
+    async Task OnPhoneChanged(string value)
+    {
+        _phone = value;
+        if (_client is not null && _client.Phone != value) _client = null;
+        if (value.Count(char.IsDigit) >= 4) await Suggest(value);
+    }
+
+    async Task Suggest(string text) =>
+        _suggestions = string.IsNullOrWhiteSpace(text) || text.Trim().Length < 2 ? [] : (await Api.GetClientsAsync(text.Trim())).Take(4).ToList();
+
+    void PickClient(ClientItem c)
+    {
+        _client = c;
+        _name = c.Name;
+        _phone = c.Phone;
+        _suggestions = [];
+    }
+
+    void PickTime(string t)
+    {
+        _time = TimeSpan.Parse(t);
+        _problem = null;
+    }
+
+    async Task Save()
+    {
+        _saving = true;
+        _problem = null;
+        var at = _date!.Value.Date + _time!.Value;
+        var resp = IsReschedule
+            ? await Api.RescheduleAppointmentAsync(Appointment!.Id, at, _masterId, _ignoreHours, _notify)
+            : await Api.CreateManualAppointmentAsync(ClientName.Trim(), ClientPhone.Trim(), _procedureId!.Value, at, _masterId, _ignoreHours, _notify);
+        _saving = false;
+        if (resp.IsSuccessStatusCode) { MudDialog.Close(DialogResult.Ok(at)); return; }
+        _problem = await ApiClient.ProblemAsync(resp);
+    }
+}

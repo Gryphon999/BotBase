@@ -1,0 +1,111 @@
+@page "/clients"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>Клиенты · BotBase</PageTitle>
+
+<PageHeader Title="Клиенты" Description="База клиентов собирается сама: из записей бота и тех, что вы внесли вручную. Один номер телефона — одна карточка с историей визитов и заметками.">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.PersonAdd" OnClick="() => Open(null)">Добавить клиента</MudButton>
+    </Actions>
+</PageHeader>
+
+<MudTextField T="string" Value="_search" ValueChanged="OnSearch" Placeholder="Поиск по имени или телефону" Immediate="true" DebounceInterval="300"
+              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" Style="max-width:420px" />
+
+@if (_clients is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_clients.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        @(string.IsNullOrWhiteSpace(_search) ? "Клиентов пока нет. Они появятся, когда бот запишет первого клиента или вы добавите запись вручную." : "Никого не нашли.")
+    </MudAlert>
+}
+else
+{
+    <MudTable Items="_clients" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm" OnRowClick="@((TableRowClickEventArgs<ClientItem> e) => Open(e.Item))" RowStyle="cursor:pointer">
+        <HeaderContent>
+            <MudTh>Клиент</MudTh>
+            <MudTh>Визитов</MudTh>
+            <MudTh>Последний визит</MudTh>
+            <MudTh>Следующая запись</MudTh>
+            <MudTh Style="text-align:right">Потратил</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Клиент">
+                <div class="d-flex align-center gap-1">
+                    <span style="font-weight:600">@context.Name</span>
+                    @if (context.HasTelegram)
+                    {
+                        <MudTooltip Text="Пишет боту в Telegram — получает напоминания"><MudIcon Icon="@Icons.Custom.Brands.Telegram" Size="Size.Small" Style="color:#2AABEE" /></MudTooltip>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(context.Notes))
+                    {
+                        <MudTooltip Text="@context.Notes"><MudIcon Icon="@Icons.Material.Rounded.StickyNote2" Size="Size.Small" Style="color:var(--bb-muted)" /></MudTooltip>
+                    }
+                </div>
+                <div class="bb-sub" style="font-size:.8rem">@context.Phone</div>
+            </MudTd>
+            <MudTd DataLabel="Визитов">@context.Visits</MudTd>
+            <MudTd DataLabel="Последний визит">@(context.LastVisit is { } l ? Fmt.Day(l) : "—")</MudTd>
+            <MudTd DataLabel="Следующая запись">
+                @if (context.NextVisit is { } n) { <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@Fmt.DayTime(n)</MudChip> }
+                else { <span class="bb-sub">—</span> }
+            </MudTd>
+            <MudTd DataLabel="Потратил" Style="text-align:right;font-weight:600">@Fmt.Money(context.TotalSpent)</MudTd>
+        </RowTemplate>
+    </MudTable>
+    <MudText Typo="Typo.caption" Class="bb-sub mt-2 d-block">Всего: @_clients.Count</MudText>
+}
+
+@code {
+    List<ClientItem>? _clients;
+    string _search = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await Api.EnsureSignedInAsync(JS, Nav)) return;
+        await Load();
+        // Ссылка из записи: /clients?open=<id> сразу открывает карточку.
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
+        if (Guid.TryParse(query["open"], out var id) && _clients?.FirstOrDefault(c => c.Id == id) is { } c)
+            await Open(c);
+    }
+
+    async Task Load() => _clients = await Api.GetClientsAsync(_search);
+
+    async Task OnSearch(string value)
+    {
+        _search = value;
+        await Load();
+    }
+
+    async Task Open(ClientItem? client)
+    {
+        var dialog = await Dialogs.ShowAsync<ClientDialog>(client?.Name ?? "Новый клиент",
+            new DialogParameters<ClientDialog> { { x => x.Client, client } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+        var result = await dialog.Result;
+        if (result is not { Canceled: false }) return;
+
+        if (result.Data is ClientDialog.BookAction && client is not null)
+        {
+            var procedures = await Api.GetProcedureListAsync();
+            var booking = await Dialogs.ShowAsync<BookingDialog>("Новая запись", new DialogParameters<BookingDialog>
+            {
+                { x => x.Procedures, procedures }, { x => x.Masters, await Api.GetMastersAsync() }, { x => x.Client, client }
+            }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+            if (await booking.Result is { Canceled: false }) Snackbar.Add($"{client.Name} записан(а)", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Сохранено", Severity.Success);
+        }
+        await Load();
+    }
+}
