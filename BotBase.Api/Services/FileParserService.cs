@@ -30,7 +30,25 @@ public class FileParserService
     {
         using var doc = WordprocessingDocument.Open(stream, false);
         var body = doc.MainDocumentPart?.Document?.Body;
-        return body?.InnerText ?? string.Empty;
+        if (body is null) return string.Empty;
+
+        // Body.InnerText склеивает абзацы и ячейки без пробелов («...во дворе.Телефон», «покрытием60 мин»),
+        // и ИИ получает кашу. Собираем текст по блокам: абзац — строка, строка таблицы — ячейки через « | ».
+        var lines = new List<string>();
+        foreach (var block in body.ChildElements)
+        {
+            if (block is DocumentFormat.OpenXml.Wordprocessing.Table table)
+            {
+                foreach (var row in table.Elements<DocumentFormat.OpenXml.Wordprocessing.TableRow>())
+                    lines.Add(string.Join(" | ", row.Elements<DocumentFormat.OpenXml.Wordprocessing.TableCell>()
+                        .Select(c => string.Join(" ", c.Elements<DocumentFormat.OpenXml.Wordprocessing.Paragraph>().Select(p => p.InnerText)).Trim())));
+            }
+            else if (block is DocumentFormat.OpenXml.Wordprocessing.Paragraph paragraph)
+            {
+                lines.Add(paragraph.InnerText);
+            }
+        }
+        return string.Join("\n", lines).Trim();
     }
 
     private static string ExtractFromExcel(Stream stream)

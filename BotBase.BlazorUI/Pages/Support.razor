@@ -98,12 +98,22 @@
     bool _composing, _sending;
     string _subject = "", _text = "", _reply = "";
 
+    [SupplyParameterFromQuery] public string? Topic { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         var token = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
         if (token is null) { Nav.NavigateTo("/login"); return; }
         Api.SetToken(token);
         await Reload();
+
+        // Переход с главной «Настроить под ключ» — сразу открываем готовое обращение.
+        if (Topic == "turnkey")
+        {
+            NewTicket();
+            _subject = "Настройка бота под ключ";
+            _text = "Здравствуйте! Хочу, чтобы вы настроили бота за меня. Пришлите, пожалуйста, анкету и стоимость.";
+        }
     }
 
     async Task Reload() =>
