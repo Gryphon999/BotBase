@@ -38,6 +38,14 @@ public class ApiClient(HttpClient http)
         return await http.PostAsync("api/knowledge", content);
     }
 
+    public record KnowledgeItem(Guid Id, string FileName, DateTime UploadedAt, string Text, bool Broken);
+
+    public async Task<KnowledgeItem?> GetKnowledgeItemAsync(Guid id)
+    {
+        var resp = await http.GetAsync($"api/knowledge/{id}");
+        return resp.IsSuccessStatusCode ? await resp.Content.ReadFromJsonAsync<KnowledgeItem>() : null;
+    }
+
     public Task<HttpResponseMessage> DeleteKnowledgeAsync(Guid id) =>
         http.DeleteAsync($"api/knowledge/{id}");
 

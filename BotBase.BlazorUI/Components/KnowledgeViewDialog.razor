@@ -1,0 +1,77 @@
+@* Просмотр файла базы знаний: показываем ровно тот текст, который читает бот. *@
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Rounded.Description" Class="mr-2" Style="vertical-align:middle" />@FileName</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (Broken)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">
+                Файл повреждён: при загрузке текст превратился в «����», и бот его не понимает.
+                Удалите этот файл и загрузите исходный документ ещё раз.
+            </MudAlert>
+        }
+        <MudText Typo="Typo.body2" Class="bb-sub mb-2">Это текст, который бот берёт из файла (@Text.Length.ToString("N0") символов).</MudText>
+        <MudTextField @bind-Value="_search" Placeholder="Поиск по тексту" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Immediate="true" DebounceInterval="250" Class="mb-3" />
+        @if (string.IsNullOrWhiteSpace(_search))
+        {
+            <div class="bb-kb-text">
+                @foreach (var line in AllLines())
+                {
+                    <div>@line</div>
+                }
+            </div>
+        }
+        else
+        {
+            var found = Fragments();
+            <MudText Typo="Typo.body2" Class="bb-sub mb-2">Найдено мест: @found.Count</MudText>
+            <div class="bb-kb-text">
+                @foreach (var fragment in found)
+                {
+                    <div class="bb-kb-fragment">
+                        @foreach (var line in fragment)
+                        {
+                            <div><MudHighlighter Text="@line" HighlightedText="@_search.Trim()" /></div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Close()">Закрыть</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string FileName { get; set; } = "";
+    [Parameter] public string Text { get; set; } = "";
+    [Parameter] public bool Broken { get; set; }
+    string _search = "";
+
+    IEnumerable<string> AllLines() => Text.Replace("\r\n", "\n").Split('\n');
+
+    // При поиске показываем каждое найденное место с соседними строками (заголовок + текст под ним),
+    // пересекающиеся куски склеиваем, чтобы строки не повторялись.
+    List<List<string>> Fragments()
+    {
+        const int before = 1, after = 6;
+        var lines = AllLines().ToList();
+        var result = new List<List<string>>();
+        var end = -1;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (!lines[i].Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
+            var from = Math.Max(i - before, end + 1);
+            var to = Math.Min(i + after, lines.Count - 1);
+            if (from > end + 1 || result.Count == 0) result.Add([]);
+            result[^1].AddRange(lines[from..(to + 1)]);
+            end = to;
+        }
+        return result;
+    }
+}
