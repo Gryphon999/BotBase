@@ -31,6 +31,7 @@
     <HeaderContent>
         <MudTh>Бизнес</MudTh>
         <MudTh>Статус</MudTh>
+        <MudTh>Тариф</MudTh>
         <MudTh>Бот</MudTh>
         <MudTh>Наполнение</MudTh>
         <MudTh>Активность</MudTh>
@@ -47,6 +48,20 @@
             @if (context.OpenTickets > 0)
             {
                 <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" Href="/admin/support">Обращений: @context.OpenTickets</MudChip>
+            }
+        </MudTd>
+        <MudTd DataLabel="Тариф">
+            @if (CrmActive(context))
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Icon="@Icons.Material.Rounded.WorkspacePremium" OnClick="() => SetCrm(context)">
+                    Бизнес @(context.CrmUntil is { } u ? $"до {u:dd.MM.yyyy}" : "∞")
+                </MudChip>
+            }
+            else
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" OnClick="() => SetCrm(context)">
+                    Старт@(context.CrmEnabled && context.CrmUntil is { } exp ? $" (истёк {exp:dd.MM})" : "")
+                </MudChip>
             }
         </MudTd>
         <MudTd DataLabel="Бот">
@@ -76,6 +91,7 @@
                 <MudMenuItem Icon="@Icons.Material.Rounded.RestartAlt" OnClick="() => RestartBot(context)" Disabled="!context.HasBot">Перезапустить бота</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Rounded.Login" OnClick="() => Impersonate(context)">Войти как клиент</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Rounded.Password" OnClick="() => ResetPassword(context)">Сбросить пароль</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Rounded.WorkspacePremium" OnClick="() => SetCrm(context)">Доступ к CRM…</MudMenuItem>
                 <MudDivider />
                 @if (context.IsActive)
                 {
@@ -149,6 +165,22 @@
         await Load();
     }
 
+    static bool CrmActive(BusinessDto b) => b.CrmEnabled && (b.CrmUntil is null || b.CrmUntil.Value.Date >= DateTime.Today);
+
+    async Task SetCrm(BusinessDto b)
+    {
+        var dialog = await Dialogs.ShowAsync<CrmAccessDialog>("Доступ к CRM", new DialogParameters<CrmAccessDialog>
+        {
+            { x => x.BusinessName, b.BusinessName }, { x => x.Enabled, CrmActive(b) }, { x => x.Until, b.CrmUntil }
+        }, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+        if (await dialog.Result is not { Canceled: false, Data: ValueTuple<bool, DateTime?> choice }) return;
+        var resp = await Api.AdminSetCrmAsync(b.Id, choice.Item1, choice.Item2);
+        Snackbar.Add(!resp.IsSuccessStatusCode ? "Не удалось изменить доступ"
+            : !choice.Item1 ? $"«{b.BusinessName}»: CRM закрыта" : choice.Item2 is { } d ? $"«{b.BusinessName}»: CRM открыта до {d:dd.MM.yyyy}" : $"«{b.BusinessName}»: CRM открыта бессрочно",
+            resp.IsSuccessStatusCode ? Severity.Success : Severity.Error);
+        await Load();
+    }
+
     async Task ResetPassword(BusinessDto b)
     {
         var ok = await Dialogs.ShowMessageBoxAsync("Сбросить пароль?",
@@ -185,7 +217,8 @@
     }
 
     record BusinessDto(Guid Id, string BusinessName, string Email, DateTime CreatedAt, bool IsActive, bool HasBot, bool OwnerConnected,
-        int Procedures, int KnowledgeFiles, int Appointments, int Conversations, DateTime? LastMessageAt, int OpenTickets);
+        int Procedures, int KnowledgeFiles, int Appointments, int Conversations, DateTime? LastMessageAt, int OpenTickets,
+        bool CrmEnabled = false, DateTime? CrmUntil = null);
     record StatsDto(int Businesses, int ActiveBusinesses, int ConnectedBots, int Appointments, int AppointmentsWeek, int MessagesWeek, int OpenTickets);
     record BotInfoDto(bool Connected, string? Username, bool TokenValid, string? WebhookUrl, int? Pending, string? LastError);
     record ImpersonateDto(string Token, string BusinessName);

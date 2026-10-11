@@ -31,7 +31,7 @@ public class AutomationWorker(IServiceScopeFactory scopes, IOptions<BotOptions> 
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var ids = await db.Businesses
-            .Where(b => b.IsActive && b.BotToken != null && (b.RemindersEnabled || b.ReviewRequestsEnabled || b.WinbackEnabled))
+            .Where(b => b.IsActive && b.BotToken != null && b.CrmEnabled && (b.RemindersEnabled || b.ReviewRequestsEnabled || b.WinbackEnabled))
             .Select(b => b.Id).ToListAsync(ct);
         foreach (var id in ids)
         {
@@ -49,6 +49,8 @@ public class AutomationWorker(IServiceScopeFactory scopes, IOptions<BotOptions> 
         var zone = BusinessClock.Zone(business.TimeZone);
         var now = BusinessClock.Now(business.TimeZone);
         var o = options.Value;
+        // Автосообщения — часть тарифа «Бизнес»: без открытого доступа к CRM клиентам ничего не пишем.
+        if (!business.HasCrm(now)) return;
         if (now.Hour < o.QuietHoursEnd || now.Hour >= o.QuietHoursStart) return;
 
         if (business.RemindersEnabled)
@@ -66,7 +68,7 @@ public class AutomationWorker(IServiceScopeFactory scopes, IOptions<BotOptions> 
 
                 a.ReminderSentAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
-                await messenger.SendAsync(business, a, ClientTexts.Reminder(business, a, now), ClientTexts.ReminderButtons(a));
+                await messenger.SendAsync(business, a, l => ClientTexts.Reminder(l, business, a, now), l => ClientTexts.ReminderButtons(l, a));
             }
         }
 
@@ -83,7 +85,7 @@ public class AutomationWorker(IServiceScopeFactory scopes, IOptions<BotOptions> 
                 if (end > now.AddHours(-ReviewAfterHours) || end < now.AddHours(-ReviewWindowHours)) continue;
                 a.ReviewRequestedAt = DateTime.UtcNow;
                 await db.SaveChangesAsync(ct);
-                await messenger.SendAsync(business, a, ClientTexts.ReviewRequest(business), ClientTexts.RatingButtons(a));
+                await messenger.SendAsync(business, a, l => ClientTexts.ReviewRequest(l, business), _ => ClientTexts.RatingButtons(a));
             }
         }
 
@@ -108,7 +110,7 @@ public class AutomationWorker(IServiceScopeFactory scopes, IOptions<BotOptions> 
                 // Одно сообщение на «перерыв»: после нового визита клиент снова может получить его через N дней.
                 x.Client.WinbackSentAt = now;
                 await db.SaveChangesAsync(ct);
-                await messenger.SendAsync(business, x.Client.TelegramChatId!.Value, ClientTexts.Winback(business, x.Client));
+                await messenger.SendAsync(business, x.Client.TelegramChatId!.Value, l => ClientTexts.Winback(l, business, x.Client));
             }
         }
     }

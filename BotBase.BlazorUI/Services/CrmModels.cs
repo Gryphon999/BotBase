@@ -21,7 +21,7 @@ public record ScheduleDay(int DayOfWeek, bool IsWorkingDay, string? StartTime, s
 
 public record MasterItem(Guid Id, string Name, List<Guid> ProcedureIds, List<ScheduleDay>? Schedule);
 
-public record AutomationSettings(string TimeZone, bool RemindersEnabled, bool ReviewRequestsEnabled, string? ReviewUrl, bool WinbackEnabled, int WinbackAfterDays);
+public record AutomationSettings(string TimeZone, bool RemindersEnabled, bool ReviewRequestsEnabled, string? ReviewUrl, bool WinbackEnabled, int WinbackAfterDays, string MessagesLanguage = "ru");
 
 public record StatsTop(string Name, int Count, decimal Revenue);
 public record StatsDay(int Day, int Count);

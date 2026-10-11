@@ -15,7 +15,10 @@
                 <MudText Typo="Typo.subtitle1" Style="min-width:160px;text-align:center;text-transform:capitalize">@_currentMonth.ToString("MMMM yyyy", Ru)</MudText>
                 <MudIconButton Icon="@Icons.Material.Rounded.ChevronRight" OnClick="NextMonth" Size="Size.Small" />
             </MudPaper>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="() => NewBooking(_selectedDate)">Новая запись</MudButton>
+            @if (_crm)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="() => NewBooking(_selectedDate)">Новая запись</MudButton>
+            }
         </div>
     </Actions>
 </PageHeader>
@@ -80,8 +83,11 @@
                 @{ var n = dayAppts.Count(a => !a.IsCancelled); }
                 <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ml-2">@n @Plural(n, "запись", "записи", "записей")</MudChip>
             </MudText>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Add"
-                       OnClick="() => NewBooking(_selectedDate)">Записать на этот день</MudButton>
+            @if (_crm)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Add"
+                           OnClick="() => NewBooking(_selectedDate)">Записать на этот день</MudButton>
+            }
         </div>
 
         @if (dayAppts.Count == 0)
@@ -149,8 +155,11 @@
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Rounded.CheckCircle" OnClick="() => Confirm(context)">Подтвердить</MudMenuItem>
                                 }
-                                <MudMenuItem Icon="@Icons.Material.Rounded.EventRepeat" OnClick="() => Reschedule(context)">Перенести</MudMenuItem>
-                                @if (context.ScheduledAt < DateTime.Now)
+                                @if (_crm)
+                                {
+                                    <MudMenuItem Icon="@Icons.Material.Rounded.EventRepeat" OnClick="() => Reschedule(context)">Перенести</MudMenuItem>
+                                }
+                                @if (_crm && context.ScheduledAt < DateTime.Now)
                                 {
                                     <MudMenuItem Icon="@Icons.Material.Rounded.PersonOff" OnClick="() => ToggleNoShow(context)">@(context.NoShow ? "Клиент всё-таки пришёл" : "Не пришёл")</MudMenuItem>
                                 }
@@ -173,6 +182,7 @@
     List<AppointmentItem> _monthAppointments = [];
     List<ProcedureItem> _procedures = [];
     List<MasterItem> _masters = [];
+    bool _crm; // тариф «Бизнес»: ручная запись, перенос, неявки, мастера
 
     int StartOffset => ((int)_currentMonth.DayOfWeek + 6) % 7; // Mon=0, Sun=6
     int DaysInMonth => DateTime.DaysInMonth(_currentMonth.Year, _currentMonth.Month);
@@ -196,11 +206,11 @@
     protected override async Task OnInitializedAsync()
     {
         if (!await Api.EnsureSignedInAsync(JS, Nav)) return;
-        var procedures = Api.GetProcedureListAsync();
-        var masters = Api.GetMastersAsync();
+        _crm = (await Api.GetCrmAccessAsync()).Enabled;
         await LoadMonthAsync();
-        _procedures = await procedures;
-        _masters = await masters;
+        if (!_crm) return;
+        _procedures = await Api.GetProcedureListAsync();
+        _masters = await Api.GetMastersAsync();
     }
 
     async Task LoadMonthAsync()

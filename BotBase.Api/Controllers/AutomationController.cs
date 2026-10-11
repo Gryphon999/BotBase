@@ -1,3 +1,5 @@
+using BotBase.Api.Data.Entities;
+using BotBase.Api.Filters;
 using BotBase.Api.Data;
 using BotBase.Api.Extensions;
 using BotBase.Api.Services;
@@ -8,6 +10,7 @@ namespace BotBase.Api.Controllers;
 
 // Настройки автосообщений клиентам: напоминания, просьба об отзыве, «давно не были», часовой пояс.
 [Authorize]
+[RequiresCrm]
 [ApiController]
 [Route("api/automation")]
 public class AutomationController(AppDbContext db) : ControllerBase
@@ -17,7 +20,7 @@ public class AutomationController(AppDbContext db) : ControllerBase
     {
         var b = await db.Businesses.FindAsync(User.GetBusinessId());
         if (b is null) return NotFound();
-        return Ok(new AutomationSettings(b.TimeZone, b.RemindersEnabled, b.ReviewRequestsEnabled, b.ReviewUrl, b.WinbackEnabled, b.WinbackAfterDays));
+        return Ok(new AutomationSettings(b.TimeZone, b.RemindersEnabled, b.ReviewRequestsEnabled, b.ReviewUrl, b.WinbackEnabled, b.WinbackAfterDays, b.MessagesLanguage));
     }
 
     [HttpPut]
@@ -37,9 +40,29 @@ public class AutomationController(AppDbContext db) : ControllerBase
         b.ReviewUrl = url;
         b.WinbackEnabled = req.WinbackEnabled;
         b.WinbackAfterDays = req.WinbackAfterDays;
+        b.MessagesLanguage = ClientTexts.Normalize(req.MessagesLanguage);
         await db.SaveChangesAsync();
         return NoContent();
     }
 
-    public record AutomationSettings(string TimeZone, bool RemindersEnabled, bool ReviewRequestsEnabled, string? ReviewUrl, bool WinbackEnabled, int WinbackAfterDays);
+    // Образцы сообщений на выбранном языке — для превью на странице «Автосообщения».
+    [HttpGet("preview")]
+    public async Task<IActionResult> Preview([FromQuery] string? lang)
+    {
+        var b = await db.Businesses.FindAsync(User.GetBusinessId());
+        if (b is null) return NotFound();
+        var l = ClientTexts.Normalize(lang);
+        var now = BusinessClock.Now(b.TimeZone);
+        var sample = new Appointment { Id = Guid.Empty, ClientName = l switch { "hy" => "Անի", "en" => "Anna", _ => "Анна" }, ProcedureName = l switch { "hy" => "Մանիկյուր", "en" => "Manicure", _ => "Маникюр" }, ScheduledAt = now.Date.AddDays(1).AddHours(14) };
+        var client = new Client { Name = sample.ClientName };
+        return Ok(new
+        {
+            reminder = ClientTexts.Reminder(l, b, sample, now),
+            reminderButtons = ClientTexts.ReminderButtons(l, sample)[0].Select(x => x.Text),
+            review = ClientTexts.ReviewRequest(l, b),
+            winback = ClientTexts.Winback(l, b, client)
+        });
+    }
+
+    public record AutomationSettings(string TimeZone, bool RemindersEnabled, bool ReviewRequestsEnabled, string? ReviewUrl, bool WinbackEnabled, int WinbackAfterDays, string MessagesLanguage = "ru");
 }

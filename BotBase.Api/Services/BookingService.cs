@@ -133,7 +133,9 @@ public class BookingService(AppDbContext db)
     {
         var business = await db.Businesses.AsNoTracking().FirstAsync(b => b.Id == businessId);
         var procedures = await db.Procedures.AsNoTracking().Where(p => p.BusinessId == businessId && p.IsActive).ToListAsync();
-        var masters = await db.Masters.AsNoTracking().Include(m => m.Procedures)
+        // Мастера — часть тарифа «Бизнес»: при закрытой CRM бизнес работает с одним общим расписанием.
+        var crm = business.HasCrm(BusinessClock.Now(business.TimeZone));
+        var masters = !crm ? [] : await db.Masters.AsNoTracking().Include(m => m.Procedures)
             .Where(m => m.BusinessId == businessId && m.IsActive).OrderBy(m => m.CreatedAt).ToListAsync();
         var schedules = await db.WorkSchedules.AsNoTracking().Where(s => s.BusinessId == businessId).ToListAsync();
         return new Context(business, procedures, masters, schedules);

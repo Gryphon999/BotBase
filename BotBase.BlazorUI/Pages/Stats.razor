@@ -5,6 +5,12 @@
 
 <PageTitle>Статистика · BotBase</PageTitle>
 
+@if (_locked)
+{
+    <CrmLocked Title="Статистика" />
+    return;
+}
+
 <PageHeader Title="Статистика" Description="Сколько записей за месяц, сколько из них сделал бот, выручка, неявки и самые популярные услуги.">
     <Actions>
         <MudPaper Class="d-flex align-center px-1 py-1" Style="border-radius:999px">
@@ -97,6 +103,7 @@ else
 }
 
 @code {
+    bool _locked;
     static readonly System.Globalization.CultureInfo Ru = new("ru-RU");
     DateTime _month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     StatsData? _s;
@@ -104,6 +111,9 @@ else
     protected override async Task OnInitializedAsync()
     {
         if (!await Api.EnsureSignedInAsync(JS, Nav)) return;
+        // Раздел тарифа «Бизнес»: без доступа — предложение подключить, данные не запрашиваем.
+        _locked = !(await Api.GetCrmAccessAsync()).Enabled;
+        if (_locked) return;
         await Load();
     }
 

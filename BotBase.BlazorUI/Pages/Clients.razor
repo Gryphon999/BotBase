@@ -7,6 +7,12 @@
 
 <PageTitle>Клиенты · BotBase</PageTitle>
 
+@if (_locked)
+{
+    <CrmLocked Title="Клиенты" />
+    return;
+}
+
 <PageHeader Title="Клиенты" Description="База клиентов собирается сама: из записей бота и тех, что вы внесли вручную. Один номер телефона — одна карточка с историей визитов и заметками.">
     <Actions>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.PersonAdd" OnClick="() => Open(null)">Добавить клиента</MudButton>
@@ -64,12 +70,16 @@ else
 }
 
 @code {
+    bool _locked;
     List<ClientItem>? _clients;
     string _search = "";
 
     protected override async Task OnInitializedAsync()
     {
         if (!await Api.EnsureSignedInAsync(JS, Nav)) return;
+        // Раздел тарифа «Бизнес»: без доступа — предложение подключить, данные не запрашиваем.
+        _locked = !(await Api.GetCrmAccessAsync()).Enabled;
+        if (_locked) return;
         await Load();
         // Ссылка из записи: /clients?open=<id> сразу открывает карточку.
         var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);

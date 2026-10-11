@@ -152,7 +152,19 @@ public class ApiClient(HttpClient http)
     public Task<HttpResponseMessage> UpdateMasterAsync(Guid id, string name, List<Guid> procedureIds, List<ScheduleDay>? schedule) => http.PutAsJsonAsync($"api/masters/{id}", new { name, procedureIds, schedule });
     public Task<HttpResponseMessage> DeleteMasterAsync(Guid id) => http.DeleteAsync($"api/masters/{id}");
 
+    // ---- Доступ к CRM (тариф «Бизнес») ----
+    public record CrmAccess(bool Enabled, DateTime? Until);
+    public async Task<CrmAccess> GetCrmAccessAsync()
+    {
+        try { return await http.GetFromJsonAsync<CrmAccess>("api/crm-access") ?? new(false, null); }
+        catch { return new(false, null); }
+    }
+    public Task<HttpResponseMessage> AdminSetCrmAsync(Guid id, bool enabled, DateTime? until) =>
+        http.PostAsJsonAsync($"api/admin/businesses/{id}/crm", new { enabled, until = until?.ToString("yyyy-MM-dd") });
+
     // ---- Автосообщения и статистика ----
+    public record AutomationPreview(string Reminder, List<string> ReminderButtons, string Review, string Winback);
+    public Task<AutomationPreview?> GetAutomationPreviewAsync(string lang) => http.GetFromJsonAsync<AutomationPreview>($"api/automation/preview?lang={lang}");
     public Task<AutomationSettings?> GetAutomationAsync() => http.GetFromJsonAsync<AutomationSettings>("api/automation");
     public Task<HttpResponseMessage> SaveAutomationAsync(AutomationSettings s) => http.PutAsJsonAsync("api/automation", s);
     public Task<StatsData?> GetStatsAsync(string month) => http.GetFromJsonAsync<StatsData>($"api/stats?month={month}");

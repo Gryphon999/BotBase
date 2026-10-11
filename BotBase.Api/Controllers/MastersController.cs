@@ -1,3 +1,4 @@
+using BotBase.Api.Filters;
 using BotBase.Api.Data;
 using BotBase.Api.Data.Entities;
 using BotBase.Api.Extensions;
@@ -10,6 +11,7 @@ namespace BotBase.Api.Controllers;
 // Мастера: кто какие процедуры делает и по какому расписанию работает.
 // Пока мастеров нет — бизнес работает с одним общим расписанием, как раньше.
 [Authorize]
+[RequiresCrm]
 [ApiController]
 [Route("api/masters")]
 public class MastersController(AppDbContext db) : ControllerBase

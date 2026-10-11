@@ -41,7 +41,8 @@ public class AdminController(AppDbContext db, TelegramService telegram, AuthServ
                 db.Appointments.Count(a => a.BusinessId == b.Id),
                 b.Conversations.Count,
                 db.Messages.Where(m => m.Conversation.BusinessId == b.Id).Max(m => (DateTime?)m.CreatedAt),
-                db.SupportTickets.Count(t => t.BusinessId == b.Id && t.Status == Data.Entities.SupportTicketStatus.Open)))
+                db.SupportTickets.Count(t => t.BusinessId == b.Id && t.Status == Data.Entities.SupportTicketStatus.Open),
+                b.CrmEnabled, b.CrmUntil))
             .ToListAsync();
         return Ok(list);
     }
@@ -55,6 +56,18 @@ public class AdminController(AppDbContext db, TelegramService telegram, AuthServ
         var username = await telegram.GetBotUsernameAsync(b.BotToken);
         var hook = await telegram.GetWebhookInfoAsync(b.BotToken);
         return Ok(new { connected = true, username, tokenValid = username is not null, webhookUrl = hook?.Url, pending = hook?.PendingUpdateCount, lastError = hook?.LastErrorMessage });
+    }
+
+    // Доступ к CRM (тариф «Бизнес»): открыть бессрочно, открыть до даты оплаты или закрыть.
+    [HttpPost("businesses/{id:guid}/crm")]
+    public async Task<IActionResult> SetCrm(Guid id, CrmAccessRequest req)
+    {
+        var b = await db.Businesses.FindAsync(id);
+        if (b is null) return NotFound();
+        b.CrmEnabled = req.Enabled;
+        b.CrmUntil = req.Enabled && req.Until is { } u ? DateTime.SpecifyKind(u.Date, DateTimeKind.Utc) : null;
+        await db.SaveChangesAsync();
+        return NoContent();
     }
 
     [HttpPost("businesses/{id:guid}/disable")]
@@ -135,6 +148,7 @@ public class AdminController(AppDbContext db, TelegramService telegram, AuthServ
 
     public record AdminBusinessDto(Guid Id, string BusinessName, string Email, DateTime CreatedAt, bool IsActive,
         bool HasBot, bool OwnerConnected, int Procedures, int KnowledgeFiles, int Appointments, int Conversations,
-        DateTime? LastMessageAt, int OpenTickets);
+        DateTime? LastMessageAt, int OpenTickets, bool CrmEnabled = false, DateTime? CrmUntil = null);
+    public record CrmAccessRequest(bool Enabled, DateTime? Until);
     public record SettingsDto(string? SupportEmail, string? SupportTelegramChatId, bool SmtpConfigured = false, bool TelegramConfigured = false);
 }
