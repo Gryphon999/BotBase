@@ -77,7 +77,8 @@ public class BookingService(AppDbContext db)
             await db.SaveChangesAsync();
             await tx.CommitAsync();
         }
-        appt.Master = ctx.Masters.FirstOrDefault(m => m.Id == appt.MasterId);
+        // Через Find: вернёт уже загруженный в этот DbContext экземпляр (иначе EF падает на «двух копиях» мастера).
+        appt.Master = appt.MasterId is { } mid ? await db.Masters.FindAsync(mid) : null;
         return new BookingResult(appt, null, []);
     }
 
@@ -101,7 +102,8 @@ public class BookingService(AppDbContext db)
         appt.ClientConfirmedAt = null;
         await db.SaveChangesAsync();
         await tx.CommitAsync();
-        appt.Master = ctx.Masters.FirstOrDefault(m => m.Id == appt.MasterId);
+        // Через Find: вернёт уже загруженный в этот DbContext экземпляр (иначе EF падает на «двух копиях» мастера).
+        appt.Master = appt.MasterId is { } mid ? await db.Masters.FindAsync(mid) : null;
         return new BookingResult(appt, null, []);
     }
 
