@@ -19,6 +19,18 @@ public class ApiFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("Admin__Email", AdminEmail);
         Environment.SetEnvironmentVariable("Admin__Password", AdminPassword);
         Environment.SetEnvironmentVariable("WebhookBaseUrl", "https://botbase.test");
+        // Короткие паузы бота, чтобы тесты шли быстро (в проде — секунды).
+        Environment.SetEnvironmentVariable("Bot__DebounceMs", "300");
+        Environment.SetEnvironmentVariable("Bot__MaxDebounceMs", "1500");
+        Environment.SetEnvironmentVariable("Bot__BusyNoticeAfterSec", "1");
+        Environment.SetEnvironmentVariable("Bot__GiveUpAfterSec", "5");
+        Environment.SetEnvironmentVariable("Bot__RequestsPerMinute", "1000");
+        Environment.SetEnvironmentVariable("Bot__TokensPerMinute", "100000000");
+        // Короткие паузы бота, чтобы тесты шли быстро (в проде — секунды).
+        Environment.SetEnvironmentVariable("Bot__DebounceMs", "300");
+        Environment.SetEnvironmentVariable("Bot__MaxDebounceMs", "1500");
+        Environment.SetEnvironmentVariable("Bot__BusyNoticeAfterSec", "1");
+        Environment.SetEnvironmentVariable("Bot__GiveUpAfterSec", "5");
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.UseEnvironment("Testing");

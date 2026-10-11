@@ -3,13 +3,10 @@ using System.Text.Json.Serialization;
 
 namespace BotBase.Api.Services;
 
-public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration config, ILogger<AnthropicService> logger, GeminiRateLimiter rateLimiter)
+public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration config, ILogger<AnthropicService> logger)
 {
     public virtual async Task<string> CompleteAsync(string systemPrompt, List<(string role, string content)> history)
     {
-        if (!rateLimiter.TryAcquire())
-            throw new InvalidOperationException("Превышен лимит запросов к Gemini. Попробуйте через минуту.");
-
         var apiKey = config["Anthropic:ApiKey"];
         var client = httpFactory.CreateClient();
         client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
@@ -26,6 +23,9 @@ public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration con
         {
             var errorBody = await response.Content.ReadAsStringAsync();
             logger.LogError("Gemini error {StatusCode}: {Body}", (int)response.StatusCode, errorBody);
+            // 429 и 503 — временные: AiGateway подождёт и повторит, клиент ошибку не увидит.
+            if ((int)response.StatusCode is 429 or 503)
+                throw new AiRateLimitedException($"Gemini {(int)response.StatusCode}");
             response.EnsureSuccessStatusCode();
         }
 

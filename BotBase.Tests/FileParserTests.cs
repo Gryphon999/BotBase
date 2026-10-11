@@ -35,4 +35,23 @@ public class FileParserTests
         Assert.Contains("Маникюр с покрытием | 60 мин | 2500", text);
         Assert.DoesNotContain("покрытием60", text);
     }
+
+    [Theory]
+    [InlineData("windows-1251")]
+    [InlineData("utf-8")]
+    [InlineData("utf-8-bom")]
+    [InlineData("utf-16")]
+    public void Russian_txt_is_read_in_any_common_encoding(string encoding)
+    {
+        const string text = "Криолиполиз: противопоказания — беременность. Парковка во дворе.";
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        var bytes = encoding switch
+        {
+            "windows-1251" => System.Text.Encoding.GetEncoding(1251).GetBytes(text),
+            "utf-8" => new System.Text.UTF8Encoding(false).GetBytes(text),
+            "utf-8-bom" => [.. new System.Text.UTF8Encoding(true).GetPreamble(), .. System.Text.Encoding.UTF8.GetBytes(text)],
+            _ => [.. System.Text.Encoding.Unicode.GetPreamble(), .. System.Text.Encoding.Unicode.GetBytes(text)],
+        };
+        Assert.Equal(text, new FileParserService().ExtractText(new MemoryStream(bytes), "kb.txt"));
+    }
 }
