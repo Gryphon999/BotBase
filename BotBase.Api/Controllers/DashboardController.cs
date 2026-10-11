@@ -27,7 +27,7 @@ public class DashboardController(AppDbContext db) : ControllerBase
             ownerConnected = b.OwnerNotificationChatId != null,
             procedures = await db.Procedures.CountAsync(p => p.BusinessId == id && p.IsActive),
             knowledgeFiles = await db.KnowledgeChunks.CountAsync(k => k.BusinessId == id),
-            scheduleSet = await db.WorkSchedules.AnyAsync(s => s.BusinessId == id && s.IsWorkingDay),
+            scheduleSet = await db.WorkSchedules.AnyAsync(s => s.BusinessId == id && s.MasterId == null && s.IsWorkingDay),
             upcomingAppointments = await db.Appointments.CountAsync(a => a.BusinessId == id && a.ScheduledAt >= now && a.Status != Data.Entities.AppointmentStatus.Cancelled),
             appointmentsWeek = await db.Appointments.CountAsync(a => a.BusinessId == id && a.CreatedAt >= weekAgo),
             conversationsWeek = await db.Conversations.CountAsync(c => c.BusinessId == id && c.Messages.Any(m => m.CreatedAt >= weekAgo)),

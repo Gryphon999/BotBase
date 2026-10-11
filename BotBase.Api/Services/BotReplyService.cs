@@ -14,8 +14,11 @@ public class BotReplyService(
     AiGateway ai,
     KnowledgeRetriever knowledge,
     CrmWebhookService crmWebhook,
+    BookingService booking,
     OwnerMessages ownerMessages)
 {
+    static readonly string[] DayNames = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
     public async Task<string> GenerateReplyAsync(DbBusiness business, Guid conversationId, Func<Task>? onBusy, CancellationToken ct)
     {
         var businessId = business.Id;
@@ -30,50 +33,69 @@ public class BotReplyService(
         var query = string.Join(" ", messages.Where(m => m.Role == "user").TakeLast(3).Select(m => m.Content));
         var knowledgeText = knowledge.Select(business.KnowledgeChunks, query);
 
-        // Load procedures and schedule to give AI booking context
         var procedures = await db.Procedures
             .Where(p => p.BusinessId == businessId && p.IsActive)
             .OrderBy(p => p.Name)
-            .ToListAsync();
+            .ToListAsync(ct);
 
-        var schedule = await db.WorkSchedules
+        var schedules = await db.WorkSchedules
             .Where(s => s.BusinessId == businessId)
             .OrderBy(s => s.DayOfWeek)
-            .ToListAsync();
+            .ToListAsync(ct);
 
-        // Занятые слоты на 60 дней вперёд (раньше было 7 — ИИ не видел записи через неделю и обещал занятое время).
-        // ScheduledAt хранит время по часам бизнеса (см. ToWallClockUtc), поэтому выводим его без пересчёта.
-        var now = DateTime.UtcNow;
+        var masters = await db.Masters.Include(m => m.Procedures)
+            .Where(m => m.BusinessId == businessId && m.IsActive)
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync(ct);
+
+        // Занятые слоты на 60 дней вперёд. ScheduledAt хранит время по часам бизнеса, поэтому выводим его без пересчёта.
+        var now = BusinessClock.Now(business.TimeZone);
         var until = now.AddDays(60);
+        var masterNames = masters.ToDictionary(m => m.Id, m => m.Name);
         var bookedSlots = (await db.Appointments
             .Where(a => a.BusinessId == businessId
-                     && a.ScheduledAt >= now
+                     && a.ScheduledAt >= now.Date
                      && a.ScheduledAt <= until
                      && a.Status != AppointmentStatus.Cancelled)
             .OrderBy(a => a.ScheduledAt)
-            .Select(a => new { a.ScheduledAt, a.ProcedureName, a.DurationMinutes })
-            .ToListAsync())
-            .Select(a => $"{a.ScheduledAt:dd.MM.yyyy HH:mm}–{a.ScheduledAt.AddMinutes(a.DurationMinutes):HH:mm} — {a.ProcedureName}")
+            .Select(a => new { a.ScheduledAt, a.ProcedureName, a.DurationMinutes, a.MasterId })
+            .ToListAsync(ct))
+            .Select(a => $"{a.ScheduledAt:dd.MM.yyyy HH:mm}–{a.ScheduledAt.AddMinutes(a.DurationMinutes):HH:mm} — {a.ProcedureName}" +
+                         (masters.Count > 0
+                             ? a.MasterId is { } mid && masterNames.TryGetValue(mid, out var mn) ? $" (мастер {mn})" : " (все мастера)"
+                             : ""))
             .ToList();
 
+        // Валюту не пишем: у клиентов BotBase цены в драмах, рублях, долларах — валюта есть в базе знаний.
         var procedureList = procedures.Count == 0
             ? "Процедуры не настроены."
-            : string.Join("\n", procedures.Select(p =>
-                $"- {p.Name}: {p.DurationMinutes} мин, {p.Price:F0} руб."));
+            : string.Join("\n", procedures.Select(p => $"- {p.Name}: {p.DurationMinutes} мин, цена {p.Price:0.##}"));
 
-        var dayNames = new[] { "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс" };
-        var scheduleText = string.Join("\n", schedule.Select(s =>
-            s.IsWorkingDay
-                ? $"- {dayNames[s.DayOfWeek]}: {s.StartTime:hh\\:mm}–{s.EndTime:hh\\:mm}"
-                : $"- {dayNames[s.DayOfWeek]}: выходной"));
+        var scheduleText = ScheduleText(schedules.Where(s => s.MasterId == null));
+
+        var mastersText = masters.Count == 0 ? "" : $$"""
+
+            МАСТЕРА (у каждого свои записи; в одно время разные мастера могут принимать разных клиентов):
+            {{string.Join("\n", masters.Select(m =>
+            {
+                var does = m.Procedures.Count == 0
+                    ? "все процедуры"
+                    : string.Join(", ", procedures.Where(p => m.Procedures.Any(mp => mp.ProcedureId == p.Id)).Select(p => p.Name));
+                var own = schedules.Where(s => s.MasterId == m.Id).ToList();
+                var hours = own.Count == 0 ? "по общему расписанию" : "\n" + ScheduleText(own).Replace("- ", "    - ");
+                return $"- {m.Name}: {does}; работает {hours}";
+            }))}}
+            """;
 
         var bookedText = bookedSlots.Count == 0
             ? "Свободно."
             : string.Join("\n", bookedSlots.Select(b => $"- {b}"));
 
-        var today = DateTime.UtcNow;
-        var todayStr = today.ToString("dd.MM.yyyy");
-        var exampleDate = today.AddDays(1).ToString("yyyy-MM-dd");
+        var todayStr = $"{now:dd.MM.yyyy} ({DayNames[((int)now.DayOfWeek + 6) % 7]}), сейчас {now:HH:mm}";
+        var exampleDate = now.AddDays(1).ToString("yyyy-MM-dd");
+        var masterStep = masters.Count == 0 ? "" :
+            "\n            2а. Если клиент хочет к определённому мастеру — учти это; если нет — предложи любого свободного мастера, который делает эту процедуру.";
+        var masterField = masters.Count == 0 ? "" : ",\"master_name\":\"...\"";
 
         var systemPrompt = $$"""
             Ты ассистент компании "{{business.BusinessName}}".
@@ -82,7 +104,7 @@ public class BotReplyService(
             Цены, адрес, условия и факты о процедурах бери ТОЛЬКО из базы знаний и списка процедур ниже — ничего не придумывай.
             Если нужной информации там нет, честно скажи, что не можешь ответить точно, и предложи связаться с администратором (контакты возьми из базы знаний, если они там есть).
 
-            Сегодняшняя дата: {{todayStr}}. Используй её при работе с датами записей.
+            Сегодня: {{todayStr}}. Используй это при работе с датами записей.
 
             База знаний:
             {{knowledgeText}}
@@ -92,6 +114,7 @@ public class BotReplyService(
 
             РАБОЧЕЕ РАСПИСАНИЕ:
             {{scheduleText}}
+            {{mastersText}}
 
             ЗАНЯТЫЕ СЛОТЫ (ближайшие 60 дней, на это время записывать НЕЛЬЗЯ):
             {{bookedText}}
@@ -99,11 +122,11 @@ public class BotReplyService(
             ИНСТРУКЦИЯ ПО ЗАПИСИ:
             Если клиент хочет записаться:
             1. Уточни желаемую процедуру (только из списка выше).
-            2. Уточни дату и время (должны входить в рабочее расписание и не конфликтовать с занятыми слотами).
+            2. Уточни дату и время (должны входить в рабочее расписание и не конфликтовать с занятыми слотами).{{masterStep}}
             3. Уточни имя клиента.
             4. Уточни номер телефона клиента.
             5. Когда ВСЕ 4 пункта собраны — подтверди запись клиенту и в конце ответа добавь РОВНО ОДНУ строку:
-            [[BOOK:{"procedure_name":"...","scheduled_at":"{{exampleDate}}T11:00:00","duration_minutes":60,"client_name":"...","client_phone":"..."}]]
+            [[BOOK:{"procedure_name":"...","scheduled_at":"{{exampleDate}}T11:00:00","duration_minutes":60,"client_name":"...","client_phone":"..."{{masterField}}}]]
             Используй формат даты ISO 8601. Не добавляй [[BOOK:...]] пока не собраны все данные.
             """;
 
@@ -111,18 +134,23 @@ public class BotReplyService(
 
         var rawReply = await ai.CompleteAsync(systemPrompt, history, onBusy, ct);
 
-        // Parse [[BOOK:...]] marker and create appointment if found
-        var booking = ExtractBookingMarker(rawReply);
-        if (booking is not null)
+        var marker = ExtractBookingMarker(rawReply);
+        if (marker is not null)
         {
-            var cleanReply = rawReply.Replace(booking.Value.FullMatch, "").Trim();
+            var cleanReply = rawReply.Replace(marker.Value.FullMatch, "").Trim();
             // Сервер — последняя инстанция: если запись не создана, ответ ИИ «вы записаны» клиенту не уходит.
-            var rejection = await TryCreateAppointmentAsync(businessId, conversationId, booking.Value.Json);
+            var rejection = await TryCreateAppointmentAsync(business, conversationId, marker.Value.Json);
             return rejection ?? cleanReply;
         }
 
         return rawReply;
     }
+
+    static string ScheduleText(IEnumerable<WorkSchedule> rows) =>
+        string.Join("\n", rows.OrderBy(s => s.DayOfWeek).Select(s =>
+            s.IsWorkingDay
+                ? $"- {DayNames[s.DayOfWeek]}: {s.StartTime:HH\\:mm}–{s.EndTime:HH\\:mm}"
+                : $"- {DayNames[s.DayOfWeek]}: выходной"));
 
     // Extracts [[BOOK:{json}]] from AI response
     private static (string Json, string FullMatch)? ExtractBookingMarker(string text)
@@ -140,7 +168,7 @@ public class BotReplyService(
 
     // Создаёт запись из маркера [[BOOK:...]]. Возвращает null, если запись создана,
     // иначе — честное сообщение клиенту (занято / нерабочее время / не хватает данных).
-    private async Task<string?> TryCreateAppointmentAsync(Guid businessId, Guid conversationId, string json)
+    private async Task<string?> TryCreateAppointmentAsync(DbBusiness business, Guid conversationId, string json)
     {
         BookingData? data;
         try
@@ -164,96 +192,22 @@ public class BotReplyService(
             return "Не получилось оформить запись: уточните, пожалуйста, процедуру, дату и время, имя и телефон.";
         }
 
+        var chatId = await db.Conversations.Where(c => c.Id == conversationId).Select(c => (long?)c.TelegramChatId).FirstOrDefaultAsync();
+
         // Время по часам бизнеса — так, как его назвал клиент (смещение часового пояса игнорируем).
-        var wallClock = parsed.DateTime;
-        var scheduledAt = ToWallClockUtc(wallClock);
-        var apptEnd = scheduledAt.AddMinutes(data.duration_minutes);
-
-        var isoDay = ((int)wallClock.DayOfWeek + 6) % 7; // БД: 0=Пн..6=Вс
-        var daySchedule = await db.WorkSchedules
-            .FirstOrDefaultAsync(s => s.BusinessId == businessId && s.DayOfWeek == isoDay);
-        if (daySchedule is not { IsWorkingDay: true, StartTime: { } open, EndTime: { } close })
-            return $"К сожалению, {wallClock:dd.MM} у нас выходной. Подскажите, пожалуйста, другой день.";
-
-        var start = TimeOnly.FromDateTime(wallClock);
-        if (start < open || start.AddMinutes(data.duration_minutes) > close || start.AddMinutes(data.duration_minutes) < start)
-            return $"К сожалению, {wallClock:dd.MM} мы работаем с {open:HH\\:mm} до {close:HH\\:mm}, " +
-                   $"а процедура длится {data.duration_minutes} мин. Выберите, пожалуйста, время в эти часы.";
-
-        if (scheduledAt < ToWallClockUtc(DateTime.UtcNow))
-            return "Это время уже прошло. Подскажите, пожалуйста, другую дату или время.";
-
-        Appointment appt;
-        // Блокировка на бизнес: проверка «свободно?» и сохранение идут атомарно,
-        // иначе два одновременных сообщения оба проходят проверку (гонка).
-        await using (var tx = await db.Database.BeginTransactionAsync())
-        {
-            await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({LockKey(businessId)})");
-
-            var dayStart = ToWallClockUtc(wallClock.Date);
-            var dayAppointments = await db.Appointments
-                .Where(a => a.BusinessId == businessId
-                         && a.Status != AppointmentStatus.Cancelled
-                         && a.ScheduledAt >= dayStart.AddDays(-1)
-                         && a.ScheduledAt < dayStart.AddDays(1))
-                .Select(a => new { a.ScheduledAt, a.DurationMinutes })
-                .ToListAsync();
-
-            bool Busy(DateTime from, DateTime to) =>
-                dayAppointments.Any(a => a.ScheduledAt < to && a.ScheduledAt.AddMinutes(a.DurationMinutes) > from);
-
-            if (Busy(scheduledAt, apptEnd))
-            {
-                var free = new List<string>();
-                for (var t = open; t.AddMinutes(data.duration_minutes) <= close && t.AddMinutes(data.duration_minutes) > t; t = t.AddMinutes(30))
-                {
-                    var from = dayStart.Add(t.ToTimeSpan());
-                    if (from >= ToWallClockUtc(DateTime.UtcNow) && !Busy(from, from.AddMinutes(data.duration_minutes)))
-                        free.Add(t.ToString("HH:mm"));
-                }
-                var nearest = free
-                    .OrderBy(f => Math.Abs((TimeOnly.Parse(f) - start).TotalMinutes))
-                    .Take(4).OrderBy(f => f).ToList();
-                return nearest.Count == 0
-                    ? $"К сожалению, {wallClock:dd.MM} в {wallClock:HH:mm} уже занято, и свободного времени в этот день не осталось. Подскажите, пожалуйста, другой день."
-                    : $"К сожалению, {wallClock:dd.MM} в {wallClock:HH:mm} уже занято. Свободное время в этот день: {string.Join(", ", nearest)}. Какое вам подходит?";
-            }
-
-            appt = new Appointment
-            {
-                Id              = Guid.NewGuid(),
-                BusinessId      = businessId,
-                ConversationId  = conversationId,
-                ProcedureName   = data.procedure_name,
-                ClientName      = data.client_name,
-                ClientPhone     = data.client_phone,
-                ScheduledAt     = scheduledAt,
-                DurationMinutes = data.duration_minutes,
-                Status          = AppointmentStatus.Pending
-            };
-            db.Appointments.Add(appt);
-            await db.SaveChangesAsync();
-            await tx.CommitAsync();
-        }
+        var result = await booking.BookAsync(business.Id, new BookingRequest(
+            data.procedure_name, data.client_name, data.client_phone, parsed.DateTime, AppointmentSource.Bot,
+            DurationMinutes: data.duration_minutes, MasterName: data.master_name,
+            ConversationId: conversationId, TelegramChatId: chatId));
+        if (result.Appointment is not { } appt) return result.Error;
 
         try
         {
-            var business = await db.Businesses.FindAsync(businessId);
-
-            if (business?.CrmWebhookUrl is { } url)
+            if (business.CrmWebhookUrl is { } url)
                 await crmWebhook.FireAsync(url, "appointment.created", appt);
 
-            if (business?.OwnerNotificationChatId is { } ownerId && business.BotToken is { } botToken)
-            {
-                var msg = $"📅 Новая запись!\n" +
-                          $"Клиент: {appt.ClientName}\n" +
-                          $"Телефон: {appt.ClientPhone}\n" +
-                          $"Процедура: {appt.ProcedureName}\n" +
-                          $"Дата и время: {wallClock:dd.MM.yyyy HH:mm}\n" +
-                          $"Длительность: {appt.DurationMinutes} мин" +
-                          ownerMessages.CabinetFooter;
-                await telegram.SendMessageAsync(botToken, ownerId, msg);
-            }
+            if (business.OwnerNotificationChatId is { } ownerId && business.BotToken is { } botToken)
+                await telegram.SendMessageAsync(botToken, ownerId, ownerMessages.NewBooking(appt));
         }
         catch
         {
@@ -262,16 +216,11 @@ public class BotReplyService(
         return null;
     }
 
-    // Соглашение BotBase: ScheduledAt хранит время по часам бизнеса, помеченное как UTC
-    // (как было на Railway с самого начала). Никаких пересчётов часовых поясов — ни на сервере, ни в браузере.
-    private static DateTime ToWallClockUtc(DateTime wallClock) => DateTime.SpecifyKind(wallClock, DateTimeKind.Utc);
-
-    private static long LockKey(Guid businessId) => BitConverter.ToInt64(businessId.ToByteArray(), 0);
-
     private record BookingData(
         string procedure_name,
         string scheduled_at,
         int duration_minutes,
         string client_name,
-        string client_phone);
+        string client_phone,
+        string? master_name = null);
 }

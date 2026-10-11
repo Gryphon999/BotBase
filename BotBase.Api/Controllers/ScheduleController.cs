@@ -17,7 +17,7 @@ public class ScheduleController(AppDbContext db) : ControllerBase
     {
         var businessId = User.GetBusinessId();
         var schedule = await db.WorkSchedules
-            .Where(s => s.BusinessId == businessId)
+            .Where(s => s.BusinessId == businessId && s.MasterId == null) // личные расписания мастеров — на странице «Мастера»
             .OrderBy(s => s.DayOfWeek)
             .Select(s => new
             {
@@ -61,7 +61,7 @@ public class ScheduleController(AppDbContext db) : ControllerBase
 
         var businessId = User.GetBusinessId();
         var existing = await db.WorkSchedules
-            .Where(s => s.BusinessId == businessId)
+            .Where(s => s.BusinessId == businessId && s.MasterId == null) // личные расписания мастеров — на странице «Мастера»
             .ToListAsync();
         db.WorkSchedules.RemoveRange(existing);
 

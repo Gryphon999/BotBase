@@ -56,6 +56,12 @@ namespace BotBase.Api.Migrations
                     b.Property<Guid>("BusinessId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("ClientConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ClientId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ClientName")
                         .IsRequired()
                         .HasColumnType("text");
@@ -73,12 +79,34 @@ namespace BotBase.Api.Migrations
                     b.Property<int>("DurationMinutes")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("MasterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("NoShow")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal?>("Price")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
                     b.Property<string>("ProcedureName")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("Rating")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ReminderSentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ReviewRequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("ScheduledAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -88,7 +116,11 @@ namespace BotBase.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BusinessId");
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("MasterId");
+
+                    b.HasIndex("BusinessId", "ScheduledAt");
 
                     b.ToTable("Appointments");
                 });
@@ -132,9 +164,74 @@ namespace BotBase.Api.Migrations
                     b.Property<string>("PasswordResetTokenHash")
                         .HasColumnType("text");
 
+                    b.Property<bool>("RemindersEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ReviewRequestsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ReviewUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("WinbackAfterDays")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("WinbackEnabled")
+                        .HasColumnType("boolean");
+
                     b.HasKey("Id");
 
                     b.ToTable("Businesses");
+                });
+
+            modelBuilder.Entity("BotBase.Api.Data.Entities.Client", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("PhoneKey")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<long?>("TelegramChatId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("WinbackSentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessId", "PhoneKey")
+                        .IsUnique();
+
+                    b.ToTable("Clients");
                 });
 
             modelBuilder.Entity("BotBase.Api.Data.Entities.Conversation", b =>
@@ -184,6 +281,48 @@ namespace BotBase.Api.Migrations
                     b.HasIndex("BusinessId");
 
                     b.ToTable("KnowledgeChunks");
+                });
+
+            modelBuilder.Entity("BotBase.Api.Data.Entities.Master", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessId");
+
+                    b.ToTable("Masters");
+                });
+
+            modelBuilder.Entity("BotBase.Api.Data.Entities.MasterProcedure", b =>
+                {
+                    b.Property<Guid>("MasterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProcedureId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("MasterId", "ProcedureId");
+
+                    b.HasIndex("ProcedureId");
+
+                    b.ToTable("MasterProcedures");
                 });
 
             modelBuilder.Entity("BotBase.Api.Data.Entities.Message", b =>
@@ -332,6 +471,9 @@ namespace BotBase.Api.Migrations
                     b.Property<bool>("IsWorkingDay")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid?>("MasterId")
+                        .HasColumnType("uuid");
+
                     b.Property<TimeOnly?>("StartTime")
                         .HasColumnType("time without time zone");
 
@@ -339,10 +481,37 @@ namespace BotBase.Api.Migrations
 
                     b.HasIndex("BusinessId");
 
+                    b.HasIndex("MasterId");
+
                     b.ToTable("WorkSchedules");
                 });
 
             modelBuilder.Entity("BotBase.Api.Data.Entities.Appointment", b =>
+                {
+                    b.HasOne("BotBase.Api.Data.Entities.Business", "Business")
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BotBase.Api.Data.Entities.Client", "Client")
+                        .WithMany("Appointments")
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("BotBase.Api.Data.Entities.Master", "Master")
+                        .WithMany()
+                        .HasForeignKey("MasterId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Business");
+
+                    b.Navigation("Client");
+
+                    b.Navigation("Master");
+                });
+
+            modelBuilder.Entity("BotBase.Api.Data.Entities.Client", b =>
                 {
                     b.HasOne("BotBase.Api.Data.Entities.Business", "Business")
                         .WithMany()
@@ -373,6 +542,36 @@ namespace BotBase.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Business");
+                });
+
+            modelBuilder.Entity("BotBase.Api.Data.Entities.Master", b =>
+                {
+                    b.HasOne("BotBase.Api.Data.Entities.Business", "Business")
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Business");
+                });
+
+            modelBuilder.Entity("BotBase.Api.Data.Entities.MasterProcedure", b =>
+                {
+                    b.HasOne("BotBase.Api.Data.Entities.Master", "Master")
+                        .WithMany("Procedures")
+                        .HasForeignKey("MasterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BotBase.Api.Data.Entities.Procedure", "Procedure")
+                        .WithMany()
+                        .HasForeignKey("ProcedureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Master");
+
+                    b.Navigation("Procedure");
                 });
 
             modelBuilder.Entity("BotBase.Api.Data.Entities.Message", b =>
@@ -427,6 +626,11 @@ namespace BotBase.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("BotBase.Api.Data.Entities.Master", null)
+                        .WithMany()
+                        .HasForeignKey("MasterId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.Navigation("Business");
                 });
 
@@ -437,9 +641,19 @@ namespace BotBase.Api.Migrations
                     b.Navigation("KnowledgeChunks");
                 });
 
+            modelBuilder.Entity("BotBase.Api.Data.Entities.Client", b =>
+                {
+                    b.Navigation("Appointments");
+                });
+
             modelBuilder.Entity("BotBase.Api.Data.Entities.Conversation", b =>
                 {
                     b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("BotBase.Api.Data.Entities.Master", b =>
+                {
+                    b.Navigation("Procedures");
                 });
 
             modelBuilder.Entity("BotBase.Api.Data.Entities.SupportTicket", b =>
