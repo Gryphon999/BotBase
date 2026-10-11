@@ -5,7 +5,7 @@ namespace BotBase.Api.Services;
 
 public class AnthropicService(IHttpClientFactory httpFactory, IConfiguration config, ILogger<AnthropicService> logger, GeminiRateLimiter rateLimiter)
 {
-    public async Task<string> CompleteAsync(string systemPrompt, List<(string role, string content)> history)
+    public virtual async Task<string> CompleteAsync(string systemPrompt, List<(string role, string content)> history)
     {
         if (!rateLimiter.TryAcquire())
             throw new InvalidOperationException("Превышен лимит запросов к Gemini. Попробуйте через минуту.");
