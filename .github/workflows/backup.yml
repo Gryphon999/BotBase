@@ -1,0 +1,47 @@
+name: Database backup
+
+# Каждую ночь и перед каждым деплоем (push в master; в Railway включён «Wait for CI»).
+on:
+  schedule:
+    - cron: "0 1 * * *"   # 05:00 по Еревану
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secrets
+        env:
+          DATABASE_URL: ${{ secrets.BOTBASE_DATABASE_URL }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$PASSPHRASE" ]; then
+            echo "::error::Добавьте секреты BOTBASE_DATABASE_URL и BACKUP_PASSPHRASE (см. docs/backups.md)"
+            exit 1
+          fi
+
+      - name: Dump, verify and encrypt
+        env:
+          DATABASE_URL: ${{ secrets.BOTBASE_DATABASE_URL }}
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          NAME="botbase_$(date -u +%Y%m%d_%H%M%S)"
+          # pg_dump новее сервера работает со старыми версиями PostgreSQL
+          docker run --rm postgres:17-alpine pg_dump "$DATABASE_URL" --no-owner --no-privileges > "$NAME.sql"
+          TABLES=$(grep -c '^CREATE TABLE' "$NAME.sql" || true)
+          echo "Tables in dump: $TABLES"
+          if [ "$TABLES" -lt 7 ]; then echo "::error::Дамп подозрительно пустой ($TABLES таблиц)"; exit 1; fi
+          gzip "$NAME.sql"
+          # Репозиторий публичный: артефакт обязательно шифруем, без пароля он бесполезен
+          gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase "$PASSPHRASE" -o "$NAME.sql.gz.gpg" "$NAME.sql.gz"
+          rm "$NAME.sql.gz"
+          echo "NAME=$NAME" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: ${{ env.NAME }}.sql.gz.gpg
+          retention-days: 30
