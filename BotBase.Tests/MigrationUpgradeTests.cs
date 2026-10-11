@@ -11,7 +11,7 @@ namespace BotBase.Tests;
 public class MigrationUpgradeTests(PostgresFixture pg)
 {
     // Последняя миграция, которая сейчас применена на проде (Railway). Обновлять после каждого деплоя с миграцией.
-    const string ProductionMigration = "20261011110746_AddAdminAndSupport";
+    const string ProductionMigration = "20261011121540_AddPasswordReset";
 
     AppDbContext Db(string cs) => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs).Options);
 

@@ -51,6 +51,14 @@ else
             </MudPaper>
         </MudItem>
         <MudItem xs="12" md="5">
+            @if (Done < Steps.Count)
+            {
+                <MudPaper Class="pa-6 mb-4 mud-elevation-0" Style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);border:none">
+                    <MudText Typo="Typo.h6" Style="color:#78350F">Нет времени разбираться?</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-4" Style="color:#92400E">Настроим бота за вас: вы заполняете короткую анкету, мы вносим услуги, расписание и базу знаний и проверяем тестовой записью.</MudText>
+                    <MudButton Href="/support?topic=turnkey" Variant="Variant.Filled" Style="background:#0E0B1F;color:#fff" StartIcon="@Icons.Material.Rounded.AutoFixHigh">Настроить под ключ</MudButton>
+                </MudPaper>
+            }
             <MudPaper Class="pa-6 mb-4">
                 <MudText Typo="Typo.h6" Class="mb-1">Быстрые действия</MudText>
                 <MudText Typo="Typo.body2" Class="bb-sub mb-4">Самое нужное в один клик</MudText>
