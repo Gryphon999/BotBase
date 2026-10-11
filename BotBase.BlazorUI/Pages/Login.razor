@@ -17,6 +17,7 @@
                 <MudTextField @bind-Value="_email" Label="Email" InputType="InputType.Email" Variant="Variant.Outlined" Class="mb-4" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Mail" />
                 <MudTextField @bind-Value="_password" Label="Пароль" InputType="@(_show ? InputType.Text : InputType.Password)" Variant="Variant.Outlined"
                               Adornment="Adornment.End" AdornmentIcon="@(_show ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)" OnAdornmentClick="() => _show = !_show" />
+                <div class="d-flex justify-end mt-2"><MudLink Href="/forgot-password" Typo="Typo.body2" Style="font-weight:600">Забыли пароль?</MudLink></div>
                 @if (_error is not null)
                 {
                     <MudAlert Severity="Severity.Error" Class="mt-4">@_error</MudAlert>

@@ -10,7 +10,7 @@ namespace BotBase.Api.Controllers;
 [Authorize(Roles = AdminAuthService.Role)]
 [ApiController]
 [Route("api/admin")]
-public class AdminController(AppDbContext db, TelegramService telegram, AuthService auth, PlatformSettingsService settings, IConfiguration config) : ControllerBase
+public class AdminController(AppDbContext db, TelegramService telegram, AuthService auth, PlatformSettingsService settings, PasswordService passwords, IConfiguration config) : ControllerBase
 {
     [HttpGet("stats")]
     public async Task<IActionResult> Stats()
@@ -94,6 +94,11 @@ public class AdminController(AppDbContext db, TelegramService telegram, AuthServ
         var token = auth.GenerateImpersonationJwt(b, User.FindFirstValue(ClaimTypes.Email) ?? "admin");
         return Ok(new { token, businessName = b.BusinessName });
     }
+
+    // Временный пароль для клиента, который не может войти (если почта ещё не настроена).
+    [HttpPost("businesses/{id:guid}/reset-password")]
+    public async Task<IActionResult> ResetPassword(Guid id) =>
+        await passwords.AdminResetAsync(id) is { } temp ? Ok(new { temporaryPassword = temp }) : NotFound();
 
     // Удаление необратимо, поэтому требуем повторить название бизнеса.
     [HttpDelete("businesses/{id:guid}")]

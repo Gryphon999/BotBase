@@ -1,5 +1,4 @@
 using BotBase.Api.Data;
-using BotBase.Api.Data.Entities;
 using BotBase.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -11,8 +10,8 @@ namespace BotBase.Tests;
 [Collection("db")]
 public class MigrationUpgradeTests(PostgresFixture pg)
 {
-    // Последняя миграция, которая сейчас применена на проде (Railway).
-    const string ProductionMigration = "20260819080045_AddOwnerNotificationChatId";
+    // Последняя миграция, которая сейчас применена на проде (Railway). Обновлять после каждого деплоя с миграцией.
+    const string ProductionMigration = "20261011110746_AddAdminAndSupport";
 
     AppDbContext Db(string cs) => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs).Options);
 
@@ -20,28 +19,32 @@ public class MigrationUpgradeTests(PostgresFixture pg)
     public async Task Production_data_survives_all_new_migrations()
     {
         var cs = pg.NewDatabase();
-        var businessId = Guid.NewGuid();
-        var conversationId = Guid.NewGuid();
+        var hash = BCrypt.Net.BCrypt.HashPassword("x");
 
         await using (var db = Db(cs))
         {
             await db.GetService<IMigrator>().MigrateAsync(ProductionMigration);
-            db.Businesses.Add(new Business
-            {
-                Id = businessId, Email = "salon@test.am", PasswordHash = BCrypt.Net.BCrypt.HashPassword("x"),
-                BusinessName = "Салон", BotToken = "123:abc", OwnerNotificationChatId = 42, CrmWebhookUrl = "https://crm.test/hook"
-            });
-            db.Procedures.Add(new Procedure { Id = Guid.NewGuid(), BusinessId = businessId, Name = "Маникюр", DurationMinutes = 60, Price = 2500 });
-            db.WorkSchedules.Add(new WorkSchedule { Id = Guid.NewGuid(), BusinessId = businessId, DayOfWeek = 0, IsWorkingDay = true, StartTime = new TimeOnly(9, 0), EndTime = new TimeOnly(18, 0) });
-            db.KnowledgeChunks.Add(new KnowledgeChunk { Id = Guid.NewGuid(), BusinessId = businessId, FileName = "prices.pdf", ExtractedText = "Прайс" });
-            db.Conversations.Add(new Conversation { Id = conversationId, BusinessId = businessId, TelegramChatId = 777 });
-            db.Messages.Add(new Message { Id = Guid.NewGuid(), ConversationId = conversationId, Role = "user", Content = "Здравствуйте" });
-            db.Appointments.Add(new Appointment
-            {
-                Id = Guid.NewGuid(), BusinessId = businessId, ConversationId = conversationId, ProcedureName = "Маникюр",
-                ClientName = "Анна", ClientPhone = "+374", ScheduledAt = new DateTime(2026, 10, 12, 10, 0, 0, DateTimeKind.Utc), DurationMinutes = 60
-            });
-            await db.SaveChangesAsync();
+            // Данные вставляем обычным SQL под схему прода — текущая модель EF может быть уже новее.
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Businesses" ("Id","Email","PasswordHash","BusinessName","BotToken","IsActive","CreatedAt","CrmWebhookUrl","OwnerNotificationChatId")
+                VALUES ('11111111-1111-1111-1111-111111111111','salon@test.am',{hash},'Салон','123:abc',true,now(),'https://crm.test/hook',42);
+                INSERT INTO "Procedures" ("Id","BusinessId","Name","DurationMinutes","Price","IsActive","CreatedAt")
+                VALUES (gen_random_uuid(),'11111111-1111-1111-1111-111111111111','Маникюр',60,2500,true,now());
+                INSERT INTO "WorkSchedules" ("Id","BusinessId","DayOfWeek","IsWorkingDay","StartTime","EndTime")
+                VALUES (gen_random_uuid(),'11111111-1111-1111-1111-111111111111',0,true,'09:00','18:00');
+                INSERT INTO "KnowledgeChunks" ("Id","BusinessId","FileName","ExtractedText","UploadedAt")
+                VALUES (gen_random_uuid(),'11111111-1111-1111-1111-111111111111','prices.pdf','Прайс',now());
+                INSERT INTO "Conversations" ("Id","BusinessId","TelegramChatId","StartedAt")
+                VALUES ('22222222-2222-2222-2222-222222222222','11111111-1111-1111-1111-111111111111',777,now());
+                INSERT INTO "Messages" ("Id","ConversationId","Role","Content","CreatedAt")
+                VALUES (gen_random_uuid(),'22222222-2222-2222-2222-222222222222','user','Здравствуйте',now());
+                INSERT INTO "Appointments" ("Id","BusinessId","ConversationId","ProcedureName","ClientName","ClientPhone","ScheduledAt","DurationMinutes","Status","CreatedAt","UpdatedAt")
+                VALUES (gen_random_uuid(),'11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','Маникюр','Анна','+374','2026-10-12 10:00+00',60,0,now(),now());
+                INSERT INTO "SupportTickets" ("Id","BusinessId","Subject","Status","CreatedAt","UpdatedAt")
+                VALUES ('33333333-3333-3333-3333-333333333333','11111111-1111-1111-1111-111111111111','Вопрос',0,now(),now());
+                INSERT INTO "SupportMessages" ("Id","TicketId","FromAdmin","Text","CreatedAt")
+                VALUES (gen_random_uuid(),'33333333-3333-3333-3333-333333333333',false,'Помогите',now());
+                """);
         }
 
         await using (var db = Db(cs))
@@ -58,6 +61,7 @@ public class MigrationUpgradeTests(PostgresFixture pg)
             Assert.Equal("Прайс", (await db.KnowledgeChunks.SingleAsync()).ExtractedText);
             Assert.Equal("Здравствуйте", (await db.Messages.SingleAsync()).Content);
             Assert.Equal("Анна", (await db.Appointments.SingleAsync()).ClientName);
+            Assert.Equal("Помогите", (await db.SupportMessages.SingleAsync()).Text);
         }
     }
 

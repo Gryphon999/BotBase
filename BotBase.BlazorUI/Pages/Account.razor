@@ -1,0 +1,56 @@
+@page "/account"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Аккаунт · BotBase</PageTitle>
+
+<PageHeader Title="Аккаунт" Description="Безопасность вашего кабинета." />
+
+<MudGrid Spacing="4">
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-6">
+            <MudText Typo="Typo.h6" Class="mb-1">Сменить пароль</MudText>
+            <MudText Typo="Typo.body2" Class="bb-sub mb-5">Новый пароль — не короче 6 символов.</MudText>
+            <MudTextField @bind-Value="_current" Label="Текущий пароль" InputType="InputType.Password" Variant="Variant.Outlined" Class="mb-4" />
+            <MudTextField @bind-Value="_new" Label="Новый пароль" InputType="InputType.Password" Variant="Variant.Outlined" Class="mb-4" />
+            <MudTextField @bind-Value="_confirm" Label="Повторите новый пароль" InputType="InputType.Password" Variant="Variant.Outlined" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-5" OnClick="Save" Disabled="_saving" StartIcon="@Icons.Material.Rounded.Lock">Сохранить пароль</MudButton>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-6">
+            <MudText Typo="Typo.h6" Class="mb-1">Забыли текущий пароль?</MudText>
+            <MudText Typo="Typo.body2" Class="bb-sub mb-4">Выйдите и нажмите «Забыли пароль?» на странице входа — пришлём ссылку на вашу почту. Или напишите в поддержку.</MudText>
+            <MudButton Href="/support" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.SupportAgent">Написать в поддержку</MudButton>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    string _current = "", _new = "", _confirm = "";
+    bool _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var token = await JS.InvokeAsync<string?>("localStorage.getItem", "jwt");
+        if (token is null) { Nav.NavigateTo("/login"); return; }
+        Api.SetToken(token);
+    }
+
+    async Task Save()
+    {
+        if (_new.Length < 6) { Snackbar.Add("Новый пароль должен быть не короче 6 символов", Severity.Warning); return; }
+        if (_new != _confirm) { Snackbar.Add("Пароли не совпадают", Severity.Warning); return; }
+        _saving = true;
+        var resp = await Api.ChangePasswordAsync(_current, _new);
+        _saving = false;
+        if (resp.IsSuccessStatusCode)
+        {
+            _current = _new = _confirm = "";
+            Snackbar.Add("Пароль изменён", Severity.Success);
+        }
+        else Snackbar.Add("Текущий пароль неверный", Severity.Error);
+    }
+}

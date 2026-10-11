@@ -54,6 +54,7 @@ builder.Services.AddSingleton<GeminiRateLimiter>();
 builder.Services.AddScoped<AdminAuthService>();
 builder.Services.AddScoped<PlatformSettingsService>();
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<PasswordService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

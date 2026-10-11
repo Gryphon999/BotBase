@@ -21,7 +21,7 @@ public class NotificationService(IConfiguration config, PlatformSettingsService 
         }
     }
 
-    public async Task SendEmailAsync(string to, string subject, string body)
+    public virtual async Task SendEmailAsync(string to, string subject, string body)
     {
         var host = config["Smtp:Host"] ?? "smtp.gmail.com";
         var user = config["Smtp:User"];
