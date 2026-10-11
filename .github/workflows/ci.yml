@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      # Тесты поднимают настоящий PostgreSQL в Docker (Testcontainers) и проверяют,
+      # что данные переживают новые миграции и перезапуск приложения.
+      - run: dotnet test BotBase.Tests --configuration Release

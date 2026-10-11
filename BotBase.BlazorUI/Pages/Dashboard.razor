@@ -3,62 +3,87 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<MudText Typo="Typo.h4" Class="mb-2">Панель управления</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-5">
-    Общий обзор состояния вашего бота. Здесь вы видите статус подключения и быстрые ссылки на основные разделы.
-</MudText>
+<PageTitle>Главная · BotBase</PageTitle>
 
-@if (_status is null)
+@if (_d is null)
 {
-    <MudProgressLinear Indeterminate="true" />
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Rounded="true" />
 }
 else
 {
-    <MudAlert Severity="@(_status.HasBot ? Severity.Success : Severity.Warning)" Class="mb-4">
-        @(_status.HasBot
-            ? $"✓ Бот @{_status.BotUsername} активен и отвечает клиентам"
-            : "Бот не настроен. Перейдите в «Настройка бота» и введите токен.")
-    </MudAlert>
+    <PageHeader Title="@($"Здравствуйте, {_d.BusinessName}!")"
+                Description="@(_d.HasBot ? "Ваш бот на связи. Вот что происходило за последние 7 дней." : "Осталось несколько шагов — и бот начнёт записывать клиентов.")">
+        <Actions>
+            <MudChip T="string" Color="@(_d.HasBot ? Color.Success : Color.Warning)" Variant="Variant.Text" Icon="@(_d.HasBot ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.Error)">
+                @(_d.HasBot ? "Бот работает" : "Бот не подключён")
+            </MudChip>
+        </Actions>
+    </PageHeader>
 
-    <MudGrid>
-        <MudItem xs="12" sm="4">
-            <MudCard>
-                <MudCardContent>
-                    <MudText Typo="Typo.h6">Настройка бота</MudText>
-                    <MudText Typo="Typo.body2" Class="mt-1">Подключите Telegram-бота</MudText>
-                </MudCardContent>
-                <MudCardActions>
-                    <MudButton Href="/bot-setup" Variant="Variant.Outlined" Color="Color.Primary">Перейти</MudButton>
-                </MudCardActions>
-            </MudCard>
+    <MudGrid Spacing="4" Class="mb-2">
+        <MudItem xs="12" sm="6" lg="3"><StatCard Label="Предстоящие записи" Value="@_d.UpcomingAppointments.ToString()" Icon="@Icons.Material.Rounded.EventAvailable" Color="#6D5DFC" /></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><StatCard Label="Новых записей за неделю" Value="@_d.AppointmentsWeek.ToString()" Icon="@Icons.Material.Rounded.TrendingUp" Color="#10B981" /></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><StatCard Label="Клиентов писали боту" Value="@_d.ConversationsWeek.ToString()" Icon="@Icons.Material.Rounded.Forum" Color="#3B82F6" Hint="за 7 дней" /></MudItem>
+        <MudItem xs="12" sm="6" lg="3"><StatCard Label="Сообщений обработано" Value="@_d.MessagesWeek.ToString()" Icon="@Icons.Material.Rounded.AutoAwesome" Color="#F59E0B" Hint="за 7 дней" /></MudItem>
+    </MudGrid>
+
+    <MudGrid Spacing="4" Class="mt-2">
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-6" Style="height:100%">
+                <div class="d-flex align-center justify-space-between mb-2">
+                    <MudText Typo="Typo.h6">Начало работы</MudText>
+                    <MudText Typo="Typo.body2" Class="bb-sub">@Done из @Steps.Count готово</MudText>
+                </div>
+                <MudProgressLinear Value="@(100.0 * Done / Steps.Count)" Color="Color.Success" Rounded="true" Size="Size.Small" Class="mb-3" />
+                @for (var i = 0; i < Steps.Count; i++)
+                {
+                    var s = Steps[i];
+                    var number = (i + 1).ToString();
+                    <a class="bb-step @(s.Done ? "done" : "")" href="@s.Href">
+                        <span class="bb-step-dot">@(s.Done ? "✓" : number)</span>
+                        <span style="flex:1">
+                            <span class="bb-step-title">@s.Title</span><br />
+                            <span class="bb-step-sub">@s.Hint</span>
+                        </span>
+                        <MudIcon Icon="@Icons.Material.Rounded.ChevronRight" Style="color:#94A3B8" />
+                    </a>
+                }
+            </MudPaper>
         </MudItem>
-        <MudItem xs="12" sm="4">
-            <MudCard>
-                <MudCardContent>
-                    <MudText Typo="Typo.h6">База знаний</MudText>
-                    <MudText Typo="Typo.body2" Class="mt-1">Загрузите файлы с информацией о бизнесе</MudText>
-                </MudCardContent>
-                <MudCardActions>
-                    <MudButton Href="/knowledge" Variant="Variant.Outlined" Color="Color.Primary">Перейти</MudButton>
-                </MudCardActions>
-            </MudCard>
-        </MudItem>
-        <MudItem xs="12" sm="4">
-            <MudCard>
-                <MudCardContent>
-                    <MudText Typo="Typo.h6">Разговоры</MudText>
-                    <MudText Typo="Typo.body2" Class="mt-1">История диалогов клиентов с ботом</MudText>
-                </MudCardContent>
-                <MudCardActions>
-                    <MudButton Href="/conversations" Variant="Variant.Outlined" Color="Color.Primary">Перейти</MudButton>
-                </MudCardActions>
-            </MudCard>
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-6 mb-4">
+                <MudText Typo="Typo.h6" Class="mb-1">Быстрые действия</MudText>
+                <MudText Typo="Typo.body2" Class="bb-sub mb-4">Самое нужное в один клик</MudText>
+                <MudStack Spacing="2">
+                    <MudButton Href="/appointments" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.CalendarMonth" FullWidth="true">Открыть календарь записей</MudButton>
+                    <MudButton Href="/conversations" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Forum" FullWidth="true">Посмотреть разговоры</MudButton>
+                    <MudButton Href="/knowledge" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.UploadFile" FullWidth="true">Обновить базу знаний</MudButton>
+                </MudStack>
+            </MudPaper>
+            <MudPaper Class="pa-6 mud-elevation-0" Style="background:linear-gradient(135deg,#0E0B1F,#2A2170);color:#fff;border:none">
+                <MudText Typo="Typo.h6" Style="color:#fff">Нужна помощь?</MudText>
+                <MudText Typo="Typo.body2" Class="mb-4" Style="color:rgba(255,255,255,.7)">Напишите нам — поможем настроить бота и ответим на вопросы.</MudText>
+                <MudButton Href="/support" Variant="Variant.Filled" Style="background:#fff;color:#0E0B1F" StartIcon="@Icons.Material.Rounded.SupportAgent">Написать в поддержку</MudButton>
+            </MudPaper>
         </MudItem>
     </MudGrid>
 }
 
 @code {
-    BotStatusResponse? _status;
+    DashboardDto? _d;
+
+    record Step(string Title, string Hint, string Href, bool Done);
+
+    List<Step> Steps => _d is null ? [] :
+    [
+        new("Подключите Telegram-бота", "Вставьте токен от @BotFather", "/bot-setup", _d.HasBot),
+        new("Включите уведомления о записях", "Отправьте /start своему боту", "/bot-setup", _d.OwnerConnected),
+        new("Добавьте процедуры", "Название, длительность и цена", "/procedures", _d.Procedures > 0),
+        new("Проверьте расписание", "Рабочие дни и часы", "/schedule", _d.ScheduleSet),
+        new("Загрузите базу знаний", "Прайс, адрес, ответы на частые вопросы", "/knowledge", _d.KnowledgeFiles > 0),
+    ];
+
+    int Done => Steps.Count(s => s.Done);
 
     protected override async Task OnInitializedAsync()
     {
@@ -66,12 +91,17 @@ else
         if (token is null) { Nav.NavigateTo("/login"); return; }
         Api.SetToken(token);
 
-        var resp = await Api.GetBotStatusAsync();
-        if (resp.IsSuccessStatusCode)
-            _status = await resp.Content.ReadFromJsonAsync<BotStatusResponse>();
-        else
-            _status = new BotStatusResponse(false, null, false);
+        var resp = await Api.GetDashboardAsync();
+        if (resp.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "jwt");
+            Nav.NavigateTo("/login");
+            return;
+        }
+        _d = await resp.Content.ReadFromJsonAsync<DashboardDto>();
+        if (_d is not null) await JS.InvokeVoidAsync("localStorage.setItem", "businessName", _d.BusinessName);
     }
 
-    record BotStatusResponse(bool HasBot, string? BotUsername, bool IsActive);
+    record DashboardDto(string BusinessName, bool HasBot, bool OwnerConnected, int Procedures, int KnowledgeFiles, bool ScheduleSet,
+        int UpcomingAppointments, int AppointmentsWeek, int ConversationsWeek, int MessagesWeek);
 }

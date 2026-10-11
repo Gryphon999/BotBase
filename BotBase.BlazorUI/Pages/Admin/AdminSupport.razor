@@ -1,0 +1,133 @@
+@page "/admin/support"
+@layout AdminLayout
+@inherits AdminPage
+@inject ISnackbar Snackbar
+
+<PageTitle>Поддержка · Админка BotBase</PageTitle>
+
+<PageHeader Title="Обращения клиентов" Description="Вопросы из раздела «Поддержка» в кабинетах клиентов. Ваш ответ приходит клиенту в кабинет и на почту." />
+
+<MudGrid Spacing="4">
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-2">
+            <MudChipSet T="string" SelectedValue="@_filter" SelectedValueChanged="OnFilter" SelectionMode="SelectionMode.SingleSelection" Class="pa-2">
+                <MudChip T="string" Value="@("Open")" Color="Color.Warning" Variant="Variant.Text">Ждут ответа</MudChip>
+                <MudChip T="string" Value="@("Answered")" Color="Color.Success" Variant="Variant.Text">Отвечены</MudChip>
+                <MudChip T="string" Value="@("Closed")" Variant="Variant.Text">Закрыты</MudChip>
+                <MudChip T="string" Value="@("all")" Variant="Variant.Text">Все</MudChip>
+            </MudChipSet>
+            @if (_tickets is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else if (_tickets.Count == 0)
+            {
+                <MudText Class="bb-sub pa-6" Align="Align.Center">Здесь пусто — отличная работа!</MudText>
+            }
+            else
+            {
+                @foreach (var t in _tickets)
+                {
+                    <div class="bb-ticket pa-4 rounded-lg @(t.Id == _selected?.Ticket.Id ? "selected" : "")" @onclick="() => Open(t.Id)">
+                        <div class="d-flex justify-space-between align-center gap-2">
+                            <MudText Typo="Typo.subtitle1" Style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@t.Subject</MudText>
+                            <StatusChip Status="@t.Status" />
+                        </div>
+                        <MudText Typo="Typo.body2" Style="font-weight:600">@t.BusinessName <span class="bb-sub" style="font-weight:400">· @t.BusinessEmail</span></MudText>
+                        <MudText Typo="Typo.body2" Class="bb-sub" Style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@t.LastMessage</MudText>
+                        <MudText Typo="Typo.caption" Class="bb-sub">@t.UpdatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm") · сообщений: @t.MessageCount</MudText>
+                    </div>
+                }
+            }
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="7">
+        @if (_selected is null)
+        {
+            <MudPaper Class="pa-10 text-center">
+                <MudIcon Icon="@Icons.Material.Rounded.Inbox" Style="font-size:56px;color:#A78BFA" />
+                <MudText Typo="Typo.h6" Class="mt-2">Выберите обращение</MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <MudPaper Class="pa-6 bb-fade-in">
+                <div class="d-flex justify-space-between align-start mb-4 gap-2 flex-wrap">
+                    <div>
+                        <MudText Typo="Typo.h6">@_selected.Ticket.Subject</MudText>
+                        <MudText Typo="Typo.body2" Class="bb-sub">@_selected.BusinessName · @_selected.BusinessEmail</MudText>
+                    </div>
+                    <div class="d-flex gap-2 align-center">
+                        <StatusChip Status="@_selected.Ticket.Status" />
+                        @if (_selected.Ticket.Status != "Closed")
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="Close">Закрыть</MudButton>
+                        }
+                    </div>
+                </div>
+                <div class="bb-chat">
+                    @foreach (var m in _selected.Ticket.Messages)
+                    {
+                        <div class="bb-msg @(m.FromAdmin ? "me" : "them")">
+                            @m.Text
+                            <div class="bb-msg-meta">@(m.FromAdmin ? "Вы" : _selected.BusinessName) · @m.CreatedAt.ToLocalTime().ToString("dd.MM HH:mm")</div>
+                        </div>
+                    }
+                </div>
+                <div class="d-flex gap-2 mt-4 align-end">
+                    <MudTextField @bind-Value="_reply" Label="Ответ клиенту" Variant="Variant.Outlined" Lines="3" Class="flex-grow-1" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Reply" Disabled="_sending" Style="height:56px" StartIcon="@Icons.Material.Rounded.Send">Ответить</MudButton>
+                </div>
+            </MudPaper>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    List<TicketDto>? _tickets;
+    DetailDto? _selected;
+    string _filter = "Open", _reply = "";
+    bool _sending;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (await EnsureAdminAsync()) await Load();
+    }
+
+    async Task OnFilter(string value) { _filter = value ?? "all"; await Load(); }
+
+    async Task Load()
+    {
+        var resp = await Api.AdminTicketsAsync(_filter == "all" ? null : _filter);
+        if (!await CheckAuthAsync(resp)) return;
+        _tickets = await resp.Content.ReadFromJsonAsync<List<TicketDto>>();
+    }
+
+    async Task Open(Guid id) => _selected = await (await Api.AdminTicketAsync(id)).Content.ReadFromJsonAsync<DetailDto>();
+
+    async Task Reply()
+    {
+        if (_selected is null || string.IsNullOrWhiteSpace(_reply)) return;
+        _sending = true;
+        var resp = await Api.AdminReplyTicketAsync(_selected.Ticket.Id, _reply);
+        _sending = false;
+        if (!resp.IsSuccessStatusCode) { Snackbar.Add("Не удалось отправить", Severity.Error); return; }
+        _reply = "";
+        Snackbar.Add("Ответ отправлен клиенту", Severity.Success);
+        await Open(_selected.Ticket.Id);
+        await Load();
+    }
+
+    async Task Close()
+    {
+        if (_selected is null) return;
+        await Api.AdminCloseTicketAsync(_selected.Ticket.Id);
+        await Open(_selected.Ticket.Id);
+        await Load();
+    }
+
+    record TicketDto(Guid Id, string Subject, string Status, DateTime UpdatedAt, Guid BusinessId, string BusinessName, string BusinessEmail, int MessageCount, string? LastMessage);
+    record DetailDto(TicketDetail Ticket, string BusinessName, string BusinessEmail);
+    record TicketDetail(Guid Id, string Subject, string Status, DateTime CreatedAt, List<MessageDto> Messages);
+    record MessageDto(bool FromAdmin, string Text, DateTime CreatedAt);
+}

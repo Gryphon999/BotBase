@@ -4,34 +4,36 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="height:100vh">
-    <MudCard Style="width:100%">
-        <MudCardHeader>
-            <MudText Typo="Typo.h5">Вход в BotBase</MudText>
-        </MudCardHeader>
-        <MudCardContent>
-            <MudTextField @bind-Value="_email" Label="Email" InputType="InputType.Email" Variant="Variant.Outlined" Class="mb-3" />
-            <MudTextField @bind-Value="_password" Label="Пароль" InputType="InputType.Password" Variant="Variant.Outlined" />
-            @if (_error is not null)
-            {
-                <MudAlert Severity="Severity.Error" Class="mt-3">@_error</MudAlert>
-            }
-        </MudCardContent>
-        <MudCardActions Class="px-4 pb-4">
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit" Disabled="_loading" FullWidth="true">
-                @(_loading ? "Входим..." : "Войти")
-            </MudButton>
-        </MudCardActions>
-        <MudCardActions Class="px-4 pb-4">
-            <MudButton Href="/register" Variant="Variant.Text" FullWidth="true">Нет аккаунта? Зарегистрироваться</MudButton>
-        </MudCardActions>
-    </MudCard>
-</MudContainer>
+<PageTitle>Вход · BotBase</PageTitle>
+
+<div class="bb-auth">
+    <AuthHero />
+    <div class="bb-auth-form">
+        <div class="bb-auth-card bb-fade-in">
+            <div class="bb-auth-mobile-brand"><BrandLogo Size="34" /> BotBase</div>
+            <h2>С возвращением</h2>
+            <div class="bb-sub">Войдите, чтобы управлять своим ботом</div>
+            <EditForm Model="this" OnValidSubmit="Submit">
+                <MudTextField @bind-Value="_email" Label="Email" InputType="InputType.Email" Variant="Variant.Outlined" Class="mb-4" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Mail" />
+                <MudTextField @bind-Value="_password" Label="Пароль" InputType="@(_show ? InputType.Text : InputType.Password)" Variant="Variant.Outlined"
+                              Adornment="Adornment.End" AdornmentIcon="@(_show ? Icons.Material.Rounded.VisibilityOff : Icons.Material.Rounded.Visibility)" OnAdornmentClick="() => _show = !_show" />
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-4">@_error</MudAlert>
+                }
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_loading" FullWidth="true" Size="Size.Large" Class="mt-6">
+                    @(_loading ? "Входим..." : "Войти")
+                </MudButton>
+            </EditForm>
+            <MudText Class="mt-6 bb-sub" Align="Align.Center">Нет аккаунта? <MudLink Href="/register" Typo="Typo.body1" Style="font-weight:700">Зарегистрироваться</MudLink></MudText>
+        </div>
+    </div>
+</div>
 
 @code {
     string _email = "", _password = "";
     string? _error;
-    bool _loading;
+    bool _loading, _show;
 
     async Task Submit()
     {
@@ -42,15 +44,21 @@
         {
             var result = await resp.Content.ReadFromJsonAsync<LoginResponse>();
             await JS.InvokeVoidAsync("localStorage.setItem", "jwt", result!.Token);
+            await JS.InvokeVoidAsync("localStorage.setItem", "businessName", result.BusinessName);
+            await JS.InvokeVoidAsync("localStorage.removeItem", "impersonating");
             Api.SetToken(result.Token);
             Nav.NavigateTo("/dashboard");
         }
         else
         {
-            _error = "Неверный email или пароль";
+            var err = resp.StatusCode == System.Net.HttpStatusCode.Forbidden
+                ? (await resp.Content.ReadFromJsonAsync<ErrorResponse>())?.Error
+                : null;
+            _error = err ?? "Неверный email или пароль";
         }
         _loading = false;
     }
 
     record LoginResponse(string Token, string BusinessName);
+    record ErrorResponse(string Error);
 }

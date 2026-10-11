@@ -3,11 +3,9 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
-<MudText Typo="Typo.h4" Class="mb-2">Процедуры</MudText>
-<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-5">
-    Список услуг вашего бизнеса. Бот предлагает клиентам только эти процедуры при записи
-    и учитывает их длительность, чтобы записи не накладывались друг на друга.
-</MudText>
+<PageTitle>Процедуры · BotBase</PageTitle>
+
+<PageHeader Title="Процедуры" Description="Список услуг вашего бизнеса. Бот предлагает клиентам только эти процедуры при записи и учитывает их длительность, чтобы записи не накладывались друг на друга." />
 
 @if (_procedures is null)
 {
@@ -25,7 +23,7 @@ else
                 <MudText Typo="Typo.h6" Class="mb-3">@(_editId is null ? "Новая процедура" : "Редактировать")</MudText>
                 <MudTextField @bind-Value="_formName" Label="Название" Required="true" Class="mb-3" />
                 <MudNumericField @bind-Value="_formDuration" Label="Длительность (минуты)" Min="1" Class="mb-3" />
-                <MudNumericField @bind-Value="_formPrice" Label="Цена (₽)" Min="0" Format="F0" Class="mb-3" />
+                <MudNumericField @bind-Value="_formPrice" Label="Цена" Min="0" Format="F0" Class="mb-3" />
                 @if (_formError is not null)
                 {
                     <MudAlert Severity="Severity.Error" Class="mb-2">@_formError</MudAlert>
@@ -55,7 +53,7 @@ else
             <RowTemplate>
                 <MudTd>@context.Name</MudTd>
                 <MudTd>@context.DurationMinutes мин</MudTd>
-                <MudTd>@context.Price.ToString("F0") ₽</MudTd>
+                <MudTd>@context.Price.ToString("N0")</MudTd>
                 <MudTd>
                     <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
                                    OnClick="() => ShowEditForm(context)" />

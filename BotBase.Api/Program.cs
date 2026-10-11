@@ -42,7 +42,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(opt =>
     opt.KnownProxies.Clear();
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(opt => opt.Filters.Add<BotBase.Api.Filters.ActiveBusinessFilter>());
 builder.Services.AddHttpClient();
 
 builder.Services.AddScoped<AuthService>();
@@ -51,6 +51,9 @@ builder.Services.AddScoped<AnthropicService>();
 builder.Services.AddScoped<FileParserService>();
 builder.Services.AddScoped<CrmWebhookService>();
 builder.Services.AddSingleton<GeminiRateLimiter>();
+builder.Services.AddScoped<AdminAuthService>();
+builder.Services.AddScoped<PlatformSettingsService>();
+builder.Services.AddScoped<NotificationService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -75,6 +78,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<AdminAuthService>().EnsureSeededAsync();
 }
 
 app.UseForwardedHeaders();

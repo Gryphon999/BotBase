@@ -6,7 +6,7 @@ namespace BotBase.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(AuthService auth) : ControllerBase
+public class AuthController(AuthService auth, PlatformSettingsService settings) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest req)
@@ -24,6 +24,11 @@ public class AuthController(AuthService auth) : ControllerBase
         var business = await auth.LoginAsync(req.Email, req.Password);
         if (business is null)
             return Unauthorized(new { error = "Неверный email или пароль" });
+        if (!business.IsActive)
+        {
+            var support = await settings.GetAsync(PlatformSettingsService.SupportEmail);
+            return StatusCode(403, new { error = "Аккаунт отключён администратором." + (support is null ? "" : $" Напишите в поддержку: {support}") });
+        }
         var token = auth.GenerateJwt(business);
         return Ok(new LoginResponse(token, business.BusinessName));
     }

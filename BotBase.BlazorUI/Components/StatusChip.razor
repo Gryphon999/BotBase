@@ -1,0 +1,8 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@Color" Class="ma-0">@Label</MudChip>
+
+@code {
+    [Parameter] public string Status { get; set; } = "";
+
+    Color Color => Status switch { "Open" => Color.Warning, "Answered" => Color.Success, _ => Color.Default };
+    string Label => Status switch { "Open" => "Ждёт ответа", "Answered" => "Есть ответ", "Closed" => "Закрыто", _ => Status };
+}
