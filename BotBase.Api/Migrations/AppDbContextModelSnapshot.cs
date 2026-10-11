@@ -22,6 +22,31 @@ namespace BotBase.Api.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("BotBase.Api.Data.Entities.AdminUser", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.ToTable("AdminUsers");
+                });
+
             modelBuilder.Entity("BotBase.Api.Data.Entities.Appointment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -182,6 +207,20 @@ namespace BotBase.Api.Migrations
                     b.ToTable("Messages");
                 });
 
+            modelBuilder.Entity("BotBase.Api.Data.Entities.PlatformSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("PlatformSettings");
+                });
+
             modelBuilder.Entity("BotBase.Api.Data.Entities.Procedure", b =>
                 {
                     b.Property<Guid>("Id")
@@ -212,6 +251,61 @@ namespace BotBase.Api.Migrations
                     b.HasIndex("BusinessId");
 
                     b.ToTable("Procedures");
+                });
+
+            modelBuilder.Entity("BotBase.Api.Data.Entities.SupportMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("FromAdmin")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TicketId");
+
+                    b.ToTable("SupportMessages");
+                });
+
+            modelBuilder.Entity("BotBase.Api.Data.Entities.SupportTicket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessId", "UpdatedAt");
+
+                    b.ToTable("SupportTickets");
                 });
 
             modelBuilder.Entity("BotBase.Api.Data.Entities.WorkSchedule", b =>
@@ -297,6 +391,28 @@ namespace BotBase.Api.Migrations
                     b.Navigation("Business");
                 });
 
+            modelBuilder.Entity("BotBase.Api.Data.Entities.SupportMessage", b =>
+                {
+                    b.HasOne("BotBase.Api.Data.Entities.SupportTicket", "Ticket")
+                        .WithMany("Messages")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("BotBase.Api.Data.Entities.SupportTicket", b =>
+                {
+                    b.HasOne("BotBase.Api.Data.Entities.Business", "Business")
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Business");
+                });
+
             modelBuilder.Entity("BotBase.Api.Data.Entities.WorkSchedule", b =>
                 {
                     b.HasOne("BotBase.Api.Data.Entities.Business", "Business")
@@ -316,6 +432,11 @@ namespace BotBase.Api.Migrations
                 });
 
             modelBuilder.Entity("BotBase.Api.Data.Entities.Conversation", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("BotBase.Api.Data.Entities.SupportTicket", b =>
                 {
                     b.Navigation("Messages");
                 });

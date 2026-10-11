@@ -36,6 +36,26 @@ public class TelegramService(IHttpClientFactory httpFactory)
             new { chat_id = chatId, text });
     }
 
+    public async Task<WebhookInfo?> GetWebhookInfoAsync(string token)
+    {
+        try
+        {
+            var client = httpFactory.CreateClient();
+            var resp = await client.GetFromJsonAsync<WebhookInfoResponse>($"https://api.telegram.org/bot{token}/getWebhookInfo");
+            return resp?.Result;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public record WebhookInfo(
+        [property: System.Text.Json.Serialization.JsonPropertyName("url")] string Url,
+        [property: System.Text.Json.Serialization.JsonPropertyName("pending_update_count")] int PendingUpdateCount,
+        [property: System.Text.Json.Serialization.JsonPropertyName("last_error_message")] string? LastErrorMessage);
+    private record WebhookInfoResponse(bool Ok, WebhookInfo? Result);
+
     private record TelegramMeResponse(bool Ok, TelegramUser? Result);
     private record TelegramUser(string Username);
 }

@@ -47,17 +47,24 @@ public class AuthService(AppDbContext db, IConfiguration config)
 
     public string GenerateJwt(Business business) => BuildToken(business, DateTime.UtcNow.AddYears(2));
 
+    // Токен для входа администратора в кабинет клиента: короткий срок и отметка, кто вошёл.
+    public string GenerateImpersonationJwt(Business business, string adminEmail) =>
+        BuildToken(business, DateTime.UtcNow.AddHours(1), new Claim(ImpersonatedByClaim, adminEmail));
+
+    public const string ImpersonatedByClaim = "impersonated_by";
+
     public string GenerateApiKey(Business business) => BuildToken(business, DateTime.UtcNow.AddYears(1));
 
-    private string BuildToken(Business business, DateTime expires)
+    private string BuildToken(Business business, DateTime expires, params Claim[] extra)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var claims = new[]
-        {
+        Claim[] claims =
+        [
             new Claim(ClaimTypes.NameIdentifier, business.Id.ToString()),
-            new Claim(ClaimTypes.Email, business.Email)
-        };
+            new Claim(ClaimTypes.Email, business.Email),
+            .. extra
+        ];
         var token = new JwtSecurityToken(
             claims: claims,
             expires: expires,
