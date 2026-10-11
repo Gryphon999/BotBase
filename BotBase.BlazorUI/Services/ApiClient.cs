@@ -1,3 +1,4 @@
+using Microsoft.JSInterop;
 using Microsoft.AspNetCore.Components.Forms;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -96,6 +97,65 @@ public class ApiClient(HttpClient http)
     public Task<HttpResponseMessage> GetTicketAsync(Guid id) => http.GetAsync($"api/support/tickets/{id}");
     public Task<HttpResponseMessage> CreateTicketAsync(string subject, string text) => http.PostAsJsonAsync("api/support/tickets", new { subject, text });
     public Task<HttpResponseMessage> ReplyTicketAsync(Guid id, string text) => http.PostAsJsonAsync($"api/support/tickets/{id}/messages", new { text });
+
+    // ---- Вход в кабинет: токен из localStorage, без него — на страницу входа ----
+    public async Task<bool> EnsureSignedInAsync(Microsoft.JSInterop.IJSRuntime js, Microsoft.AspNetCore.Components.NavigationManager nav)
+    {
+        var token = await js.InvokeAsync<string?>("localStorage.getItem", "jwt");
+        if (token is null) { nav.NavigateTo("/login"); return false; }
+        SetToken(token);
+        return true;
+    }
+
+    public static async Task<BookingProblem> ProblemAsync(HttpResponseMessage resp)
+    {
+        try { return await resp.Content.ReadFromJsonAsync<BookingProblem>() ?? new BookingProblem("Не получилось сохранить.", null); }
+        catch { return new BookingProblem("Не получилось сохранить. Попробуйте ещё раз.", null); }
+    }
+
+    // ---- Записи (CRM) ----
+    public async Task<List<AppointmentItem>> GetAppointmentsAsync(string? month = null, Guid? clientId = null)
+    {
+        var q = new List<string>();
+        if (month is not null) q.Add($"month={month}");
+        if (clientId is not null) q.Add($"clientId={clientId}");
+        return await http.GetFromJsonAsync<List<AppointmentItem>>("api/appointments" + (q.Count > 0 ? "?" + string.Join("&", q) : "")) ?? [];
+    }
+
+    // Время отправляем «как на часах бизнеса», без часового пояса (см. соглашение о времени на сервере).
+    static string Wall(DateTime d) => d.ToString("yyyy-MM-ddTHH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+    public Task<HttpResponseMessage> CreateManualAppointmentAsync(string clientName, string clientPhone, Guid procedureId, DateTime at, Guid? masterId, bool ignoreWorkingHours, bool notifyClient) =>
+        http.PostAsJsonAsync("api/appointments/manual", new { clientName, clientPhone, procedureId, scheduledAt = Wall(at), masterId, ignoreWorkingHours, notifyClient });
+
+    public Task<HttpResponseMessage> RescheduleAppointmentAsync(Guid id, DateTime at, Guid? masterId, bool ignoreWorkingHours, bool notifyClient) =>
+        http.PutAsJsonAsync($"api/appointments/{id}/reschedule", new { scheduledAt = Wall(at), masterId, ignoreWorkingHours, notifyClient });
+
+    public Task<HttpResponseMessage> SetAppointmentStatusAsync(Guid id, string status, bool notifyClient) =>
+        http.PatchAsJsonAsync($"api/appointments/{id}/status", new { status, notifyClient });
+
+    public Task<HttpResponseMessage> SetNoShowAsync(Guid id, bool noShow) =>
+        http.PatchAsJsonAsync($"api/appointments/{id}/no-show", new { noShow });
+
+    public async Task<List<ProcedureItem>> GetProcedureListAsync() =>
+        await http.GetFromJsonAsync<List<ProcedureItem>>("api/procedures") ?? [];
+
+    // ---- Клиенты ----
+    public async Task<List<ClientItem>> GetClientsAsync(string? search = null) =>
+        await http.GetFromJsonAsync<List<ClientItem>>("api/clients" + (string.IsNullOrWhiteSpace(search) ? "" : "?search=" + Uri.EscapeDataString(search))) ?? [];
+    public Task<HttpResponseMessage> CreateClientAsync(string name, string phone, string? notes) => http.PostAsJsonAsync("api/clients", new { name, phone, notes });
+    public Task<HttpResponseMessage> UpdateClientAsync(Guid id, string name, string phone, string? notes) => http.PutAsJsonAsync($"api/clients/{id}", new { name, phone, notes });
+
+    // ---- Мастера ----
+    public async Task<List<MasterItem>> GetMastersAsync() => await http.GetFromJsonAsync<List<MasterItem>>("api/masters") ?? [];
+    public Task<HttpResponseMessage> CreateMasterAsync(string name, List<Guid> procedureIds, List<ScheduleDay>? schedule) => http.PostAsJsonAsync("api/masters", new { name, procedureIds, schedule });
+    public Task<HttpResponseMessage> UpdateMasterAsync(Guid id, string name, List<Guid> procedureIds, List<ScheduleDay>? schedule) => http.PutAsJsonAsync($"api/masters/{id}", new { name, procedureIds, schedule });
+    public Task<HttpResponseMessage> DeleteMasterAsync(Guid id) => http.DeleteAsync($"api/masters/{id}");
+
+    // ---- Автосообщения и статистика ----
+    public Task<AutomationSettings?> GetAutomationAsync() => http.GetFromJsonAsync<AutomationSettings>("api/automation");
+    public Task<HttpResponseMessage> SaveAutomationAsync(AutomationSettings s) => http.PutAsJsonAsync("api/automation", s);
+    public Task<StatsData?> GetStatsAsync(string month) => http.GetFromJsonAsync<StatsData>($"api/stats?month={month}");
 
     // ---- Админка ----
     public Task<HttpResponseMessage> AdminLoginAsync(string email, string password) => http.PostAsJsonAsync("api/admin/auth/login", new { email, password });

@@ -12,4 +12,9 @@ public class BotOptions
     public int GiveUpAfterSec { get; set; } = 300;       // общий предел ожидания ответа ИИ
     public int KnowledgeBudgetChars { get; set; } = 12_000; // сколько текста базы знаний отправлять в ИИ
     public int MaxParallelChats { get; set; } = 8;
+
+    // Автосообщения клиентам (напоминания, отзывы, «давно не были»).
+    public int AutomationIntervalSec { get; set; } = 60;
+    public int QuietHoursEnd { get; set; } = 9;     // не пишем клиентам раньше 9:00 по времени бизнеса
+    public int QuietHoursStart { get; set; } = 21;  // и позже 21:00
 }

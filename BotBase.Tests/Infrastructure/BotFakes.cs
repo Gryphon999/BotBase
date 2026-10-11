@@ -44,6 +44,19 @@ public class FakeTelegram() : TelegramService(null!)
 
     public List<string> To(long chatId) => Sent.Where(s => s.ChatId == chatId).Select(s => s.Text).ToList();
 
+    // Кнопки последних сообщений: (чат, текст сообщения, данные кнопок).
+    public ConcurrentQueue<(long ChatId, string Text, List<string> Data)> Buttons { get; } = new();
+
+    public override Task SendButtonsAsync(string token, long chatId, string text, IReadOnlyList<IReadOnlyList<(string Text, string Data)>> rows)
+    {
+        Sent.Enqueue((chatId, text));
+        Buttons.Enqueue((chatId, text, rows.SelectMany(r => r).Select(b => b.Data).ToList()));
+        return Task.CompletedTask;
+    }
+
+    public override Task AnswerCallbackAsync(string token, string callbackId, string? text = null) => Task.CompletedTask;
+    public override Task RemoveButtonsAsync(string token, long chatId, int messageId) => Task.CompletedTask;
+
     // Ответ теперь приходит асинхронно (через очередь) — ждём нужное сообщение.
     public async Task<string> WaitFor(long chatId, Func<string, bool>? match = null, int timeoutMs = 15000)
     {

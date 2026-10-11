@@ -1,0 +1,107 @@
+@page "/automation"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Автосообщения · BotBase</PageTitle>
+
+<PageHeader Title="Автосообщения" Description="Бот сам пишет клиентам в Telegram: напоминает о записи, просит оценить визит и зовёт тех, кто давно не приходил. Ночью (с 21:00 до 9:00) сообщения не отправляются." />
+
+@if (_s is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudPaper Class="pa-5 mb-4">
+        <div class="d-flex align-start justify-space-between gap-4 flex-wrap">
+            <div style="max-width:620px">
+                <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Rounded.NotificationsActive" Color="Color.Primary" Class="mr-2" Style="vertical-align:middle" />Напоминание о записи</MudText>
+                <MudText Class="bb-sub mt-1">За сутки до визита клиент получает напоминание с кнопками «Приду» и «Отменить». Если отменит — время освободится, и вам придёт уведомление. Меньше неявок и пустых окон.</MudText>
+            </div>
+            <MudSwitch @bind-Value="_reminders" Color="Color.Primary" />
+        </div>
+        <div class="bb-msg-preview mt-3">Здравствуйте, Анна! Напоминаем о записи в «Ваш салон»: завтра в 14:00, Маникюр.<br /><br />Подтвердите, пожалуйста, что придёте 🙏<div class="bb-msg-buttons"><span>✅ Приду</span><span>❌ Отменить</span></div></div>
+    </MudPaper>
+
+    <MudPaper Class="pa-5 mb-4">
+        <div class="d-flex align-start justify-space-between gap-4 flex-wrap">
+            <div style="max-width:620px">
+                <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Rounded.Star" Style="color:#EAB308;vertical-align:middle" Class="mr-2" />Просьба оценить визит</MudText>
+                <MudText Class="bb-sub mt-1">Через 2 часа после визита бот попросит оценку от 1 до 5. Довольных клиентов (4–5 ⭐) пригласит оставить отзыв по вашей ссылке, а о низкой оценке сразу сообщит вам — чтобы вы успели всё исправить.</MudText>
+            </div>
+            <MudSwitch @bind-Value="_reviews" Color="Color.Primary" />
+        </div>
+        @if (_reviews)
+        {
+            <MudTextField @bind-Value="_reviewUrl" Label="Ссылка для отзывов (необязательно)" Variant="Variant.Outlined" Class="mt-3" Style="max-width:620px"
+                          Placeholder="https://g.page/… или ссылка на Яндекс Карты / Instagram" />
+        }
+        <div class="bb-msg-preview mt-3">Спасибо, что были у нас в «Ваш салон»! Как вам визит? Оцените, пожалуйста, от 1 до 5:<div class="bb-msg-buttons"><span>1 ⭐</span><span>2 ⭐</span><span>3 ⭐</span><span>4 ⭐</span><span>5 ⭐</span></div></div>
+    </MudPaper>
+
+    <MudPaper Class="pa-5 mb-4">
+        <div class="d-flex align-start justify-space-between gap-4 flex-wrap">
+            <div style="max-width:620px">
+                <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Rounded.Replay" Color="Color.Success" Class="mr-2" Style="vertical-align:middle" />«Давно не были»</MudText>
+                <MudText Class="bb-sub mt-1">Клиенту, который не приходил дольше указанного срока и ни на что не записан, бот один раз напишет и предложит записаться. Если клиент ответит, бот подберёт время сам.</MudText>
+            </div>
+            <MudSwitch @bind-Value="_winback" Color="Color.Primary" />
+        </div>
+        @if (_winback)
+        {
+            <MudNumericField @bind-Value="_winbackDays" Label="Через сколько дней без визитов" Min="14" Max="365" Variant="Variant.Outlined" Class="mt-3" Style="max-width:260px" />
+        }
+        <div class="bb-msg-preview mt-3">Здравствуйте, Анна! Давно не виделись в «Ваш салон» 🙂 Хотите записаться? Напишите удобный день — подберём время.</div>
+    </MudPaper>
+
+    <MudPaper Class="pa-5 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-2"><MudIcon Icon="@Icons.Material.Rounded.Public" Class="mr-2" Style="vertical-align:middle" />Часовой пояс</MudText>
+        <MudSelect T="string" @bind-Value="_zone" Variant="Variant.Outlined" Style="max-width:360px" AnchorOrigin="Origin.BottomCenter">
+            @foreach (var (id, name) in Zones)
+            {
+                <MudSelectItem T="string" Value="@id">@name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.body2" Class="bb-sub mt-2">По нему бот понимает, который сейчас час: когда «сегодня», а когда «завтра», и не пишет клиентам ночью.</MudText>
+    </MudPaper>
+
+    @if (_error is not null) { <MudAlert Severity="Severity.Error" Class="mb-3">@_error</MudAlert> }
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_saving">Сохранить</MudButton>
+}
+
+@code {
+    static readonly (string Id, string Name)[] Zones =
+    [
+        ("Asia/Yerevan", "Ереван (UTC+4)"), ("Asia/Tbilisi", "Тбилиси (UTC+4)"), ("Asia/Baku", "Баку (UTC+4)"), ("Asia/Dubai", "Дубай (UTC+4)"),
+        ("Europe/Moscow", "Москва (UTC+3)"), ("Europe/Minsk", "Минск (UTC+3)"), ("Europe/Kaliningrad", "Калининград (UTC+2)"),
+        ("Europe/Samara", "Самара (UTC+4)"), ("Asia/Yekaterinburg", "Екатеринбург (UTC+5)"), ("Asia/Tashkent", "Ташкент (UTC+5)"),
+        ("Asia/Almaty", "Алматы (UTC+5)"), ("Asia/Novosibirsk", "Новосибирск (UTC+7)"), ("Europe/Berlin", "Берлин (UTC+1/+2)")
+    ];
+
+    AutomationSettings? _s;
+    bool _reminders, _reviews, _winback, _saving;
+    string? _reviewUrl, _error;
+    int _winbackDays = 45;
+    string _zone = "Asia/Yerevan";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await Api.EnsureSignedInAsync(JS, Nav)) return;
+        _s = await Api.GetAutomationAsync();
+        if (_s is null) return;
+        (_reminders, _reviews, _reviewUrl, _winback, _winbackDays, _zone) =
+            (_s.RemindersEnabled, _s.ReviewRequestsEnabled, _s.ReviewUrl, _s.WinbackEnabled, _s.WinbackAfterDays, _s.TimeZone);
+    }
+
+    async Task Save()
+    {
+        _saving = true;
+        _error = null;
+        var resp = await Api.SaveAutomationAsync(new AutomationSettings(_zone, _reminders, _reviews, _reviewUrl, _winback, _winbackDays));
+        _saving = false;
+        if (resp.IsSuccessStatusCode) Snackbar.Add("Сохранено", Severity.Success);
+        else _error = (await ApiClient.ProblemAsync(resp)).Error;
+    }
+}

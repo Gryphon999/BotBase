@@ -61,7 +61,10 @@ builder.Services.AddSingleton<AiGateway>();
 builder.Services.AddSingleton<KnowledgeRetriever>();
 builder.Services.AddScoped<BotReplyService>();
 builder.Services.AddSingleton<OwnerMessages>();
+builder.Services.AddScoped<BookingService>();
 builder.Services.AddHostedService<BotWorker>();
+builder.Services.AddHostedService<AutomationWorker>();
+builder.Services.AddScoped<ClientMessenger>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

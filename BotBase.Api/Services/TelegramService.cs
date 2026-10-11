@@ -47,6 +47,43 @@ public class TelegramService(IHttpClientFactory httpFactory)
             new { chat_id = chatId, text });
     }
 
+    // Сообщение с кнопками под ним (по строке на ряд). Data возвращается в webhook при нажатии (до 64 байт).
+    public virtual async Task SendButtonsAsync(string token, long chatId, string text, IReadOnlyList<IReadOnlyList<(string Text, string Data)>> rows)
+    {
+        var client = httpFactory.CreateClient();
+        await client.PostAsJsonAsync(
+            $"https://api.telegram.org/bot{token}/sendMessage",
+            new
+            {
+                chat_id = chatId,
+                text,
+                reply_markup = new { inline_keyboard = rows.Select(r => r.Select(b => new { text = b.Text, callback_data = b.Data })) }
+            });
+    }
+
+    // Убирает «часики» на нажатой кнопке и показывает короткую подсказку.
+    public virtual async Task AnswerCallbackAsync(string token, string callbackId, string? text = null)
+    {
+        try
+        {
+            var client = httpFactory.CreateClient();
+            await client.PostAsJsonAsync($"https://api.telegram.org/bot{token}/answerCallbackQuery", new { callback_query_id = callbackId, text });
+        }
+        catch { /* не критично */ }
+    }
+
+    // Убирает кнопки у сообщения, чтобы на них нельзя было нажать второй раз.
+    public virtual async Task RemoveButtonsAsync(string token, long chatId, int messageId)
+    {
+        try
+        {
+            var client = httpFactory.CreateClient();
+            await client.PostAsJsonAsync($"https://api.telegram.org/bot{token}/editMessageReplyMarkup",
+                new { chat_id = chatId, message_id = messageId, reply_markup = new { inline_keyboard = Array.Empty<object>() } });
+        }
+        catch { /* не критично */ }
+    }
+
     public async Task<WebhookInfo?> GetWebhookInfoAsync(string token)
     {
         try

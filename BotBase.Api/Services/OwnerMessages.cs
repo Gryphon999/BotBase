@@ -1,3 +1,5 @@
+using BotBase.Api.Data.Entities;
+
 namespace BotBase.Api.Services;
 
 // Сообщения владельцу бизнеса в Telegram. В каждом есть ссылка на кабинет:
@@ -23,4 +25,25 @@ public class OwnerMessages(IConfiguration config)
         "Там записи, разговоры с клиентами, услуги, расписание и база знаний.";
 
     public string CabinetFooter => $"\n\n🔗 Кабинет: {CabinetUrl}";
+
+    public string NewBooking(Appointment a) =>
+        "📅 Новая запись!\n" +
+        $"Клиент: {a.ClientName}\n" +
+        $"Телефон: {a.ClientPhone}\n" +
+        $"Процедура: {a.ProcedureName}\n" +
+        (a.Master is { } m ? $"Мастер: {m.Name}\n" : "") +
+        $"Дата и время: {a.ScheduledAt:dd.MM.yyyy HH:mm}\n" +
+        $"Длительность: {a.DurationMinutes} мин" +
+        CabinetFooter;
+
+    public string ClientConfirmed(Appointment a) =>
+        $"✅ {a.ClientName} подтвердил(а) запись на {a.ScheduledAt:dd.MM HH:mm} ({a.ProcedureName}).";
+
+    public string ClientCancelled(Appointment a) =>
+        $"❌ {a.ClientName} отменил(а) запись на {a.ScheduledAt:dd.MM HH:mm} ({a.ProcedureName}). Время освободилось." +
+        CabinetFooter;
+
+    public string LowRating(Appointment a, int rating) =>
+        $"⚠️ {a.ClientName} оценил(а) визит {a.ScheduledAt:dd.MM} ({a.ProcedureName}) на {rating} из 5. " +
+        $"Стоит связаться: {a.ClientPhone}" + CabinetFooter;
 }

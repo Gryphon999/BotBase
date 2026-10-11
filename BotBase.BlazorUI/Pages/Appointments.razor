@@ -1,19 +1,22 @@
 @page "/appointments"
-@using System.Net.Http.Json
-@using System.Text.Json
-@inject HttpClient Http
+@inject ApiClient Api
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IDialogService Dialogs
 
 <PageTitle>Записи · BotBase</PageTitle>
 
-<PageHeader Title="Записи клиентов" Description="Кликните на день, чтобы увидеть, кто, когда и на какую процедуру записался. Здесь же можно подтверждать или отменять записи.">
+<PageHeader Title="Записи клиентов" Description="Все записи — от бота и внесённые вручную. Кликните на день, чтобы увидеть, кто записан; здесь же можно перенести, отменить или отметить неявку.">
     <Actions>
-        <MudPaper Class="d-flex align-center px-1 py-1" Style="border-radius:999px">
-            <MudIconButton Icon="@Icons.Material.Rounded.ChevronLeft" OnClick="PrevMonth" Size="Size.Small" />
-            <MudText Typo="Typo.subtitle1" Style="min-width:160px;text-align:center;text-transform:capitalize">@_currentMonth.ToString("MMMM yyyy")</MudText>
-            <MudIconButton Icon="@Icons.Material.Rounded.ChevronRight" OnClick="NextMonth" Size="Size.Small" />
-        </MudPaper>
+        <div class="d-flex align-center gap-3 flex-wrap">
+            <MudPaper Class="d-flex align-center px-1 py-1" Style="border-radius:999px">
+                <MudIconButton Icon="@Icons.Material.Rounded.ChevronLeft" OnClick="PrevMonth" Size="Size.Small" />
+                <MudText Typo="Typo.subtitle1" Style="min-width:160px;text-align:center;text-transform:capitalize">@_currentMonth.ToString("MMMM yyyy", Ru)</MudText>
+                <MudIconButton Icon="@Icons.Material.Rounded.ChevronRight" OnClick="NextMonth" Size="Size.Small" />
+            </MudPaper>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="() => NewBooking(_selectedDate)">Новая запись</MudButton>
+        </div>
     </Actions>
 </PageHeader>
 
@@ -71,10 +74,15 @@
 {
     var dayAppts = AppointmentsFor(_selectedDate.Value);
     <MudPaper Class="pa-4 mt-4" Elevation="2">
-        <MudText Typo="Typo.h6" Class="mb-3">
-            @_selectedDate.Value.ToString("d MMMM yyyy")
-            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ml-2">@dayAppts.Count записей</MudChip>
-        </MudText>
+        <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-3">
+            <MudText Typo="Typo.h6">
+                @_selectedDate.Value.ToString("d MMMM yyyy, dddd", Ru)
+                @{ var n = dayAppts.Count(a => !a.IsCancelled); }
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ml-2">@n @Plural(n, "запись", "записи", "записей")</MudChip>
+            </MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Rounded.Add"
+                       OnClick="() => NewBooking(_selectedDate)">Записать на этот день</MudButton>
+        </div>
 
         @if (dayAppts.Count == 0)
         {
@@ -82,37 +90,72 @@
         }
         else
         {
-            <MudTable Items="dayAppts" Hover="true" Dense="true" Elevation="0">
+            <MudTable Items="dayAppts" Hover="true" Dense="true" Elevation="0" Breakpoint="Breakpoint.Sm">
                 <HeaderContent>
                     <MudTh>Время</MudTh>
                     <MudTh>Процедура</MudTh>
+                    @if (_masters.Count > 0) { <MudTh>Мастер</MudTh> }
                     <MudTh>Клиент</MudTh>
-                    <MudTh>Телефон</MudTh>
-                    <MudTh>Длит.</MudTh>
                     <MudTh>Статус</MudTh>
-                    <MudTh>Действия</MudTh>
+                    <MudTh></MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd>@context.ScheduledAt.ToString("HH:mm")</MudTd>
-                    <MudTd>@context.ProcedureName</MudTd>
-                    <MudTd>@context.ClientName</MudTd>
-                    <MudTd>@context.ClientPhone</MudTd>
-                    <MudTd>@context.DurationMinutes мин</MudTd>
-                    <MudTd>
-                        <MudChip T="string" Color="@StatusColor(context.Status)" Size="Size.Small">
-                            @StatusLabel(context.Status)
-                        </MudChip>
+                    <MudTd DataLabel="Время" Style="@(context.IsCancelled ? "opacity:.5" : "")"><b>@context.ScheduledAt.ToString("HH:mm")</b>–@context.EndsAt.ToString("HH:mm")</MudTd>
+                    <MudTd DataLabel="Процедура" Style="@(context.IsCancelled ? "opacity:.5" : "")">
+                        @context.ProcedureName
+                        @if (context.Price is { } price) { <div class="bb-sub" style="font-size:.8rem">@Fmt.Money(price)</div> }
                     </MudTd>
-                    <MudTd>
-                        @if (context.Status == "Pending")
+                    @if (_masters.Count > 0) { <MudTd DataLabel="Мастер">@(context.MasterName ?? "—")</MudTd> }
+                    <MudTd DataLabel="Клиент" Style="@(context.IsCancelled ? "opacity:.5" : "")">
+                        <div class="d-flex align-center gap-1">
+                            <MudTooltip Text="@SourceLabel(context.Source)">
+                                <MudIcon Icon="@SourceIcon(context.Source)" Size="Size.Small" Style="color:var(--bb-muted)" />
+                            </MudTooltip>
+                            @if (context.ClientId is { } cid)
+                            {
+                                <a href="/clients?open=@cid" style="font-weight:600;text-decoration:none">@context.ClientName</a>
+                            }
+                            else
+                            {
+                                <span style="font-weight:600">@context.ClientName</span>
+                            }
+                        </div>
+                        <div class="bb-sub" style="font-size:.8rem">@context.ClientPhone</div>
+                    </MudTd>
+                    <MudTd DataLabel="Статус">
+                        <MudChip T="string" Color="@StatusColor(context)" Size="Size.Small" Variant="Variant.Text">@StatusLabel(context)</MudChip>
+                        @if (context.ClientConfirmedAt is not null && !context.IsCancelled)
                         {
-                            <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"
-                                           Size="Size.Small" OnClick="@(() => Confirm(context))" />
+                            <MudTooltip Text="Клиент нажал «Приду» в напоминании">
+                                <MudIcon Icon="@Icons.Material.Rounded.ThumbUp" Size="Size.Small" Color="Color.Success" Style="vertical-align:middle" />
+                            </MudTooltip>
                         }
-                        @if (context.Status != "Cancelled")
+                        else if (context.ReminderSentAt is not null && context.HasTelegram && !context.IsCancelled && context.ScheduledAt > DateTime.Now)
                         {
-                            <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"
-                                           Size="Size.Small" OnClick="@(() => Cancel(context))" />
+                            <MudTooltip Text="Напоминание отправлено, клиент ещё не ответил">
+                                <MudIcon Icon="@Icons.Material.Rounded.NotificationsActive" Size="Size.Small" Style="vertical-align:middle;color:var(--bb-muted)" />
+                            </MudTooltip>
+                        }
+                        @if (context.Rating is { } r)
+                        {
+                            <span class="bb-sub" style="font-size:.8rem;white-space:nowrap"> @r ⭐</span>
+                        }
+                    </MudTd>
+                    <MudTd Style="text-align:right">
+                        @if (!context.IsCancelled)
+                        {
+                            <MudMenu Icon="@Icons.Material.Rounded.MoreVert" Size="Size.Small" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                                @if (context.Status == "Pending")
+                                {
+                                    <MudMenuItem Icon="@Icons.Material.Rounded.CheckCircle" OnClick="() => Confirm(context)">Подтвердить</MudMenuItem>
+                                }
+                                <MudMenuItem Icon="@Icons.Material.Rounded.EventRepeat" OnClick="() => Reschedule(context)">Перенести</MudMenuItem>
+                                @if (context.ScheduledAt < DateTime.Now)
+                                {
+                                    <MudMenuItem Icon="@Icons.Material.Rounded.PersonOff" OnClick="() => ToggleNoShow(context)">@(context.NoShow ? "Клиент всё-таки пришёл" : "Не пришёл")</MudMenuItem>
+                                }
+                                <MudMenuItem Icon="@Icons.Material.Rounded.Cancel" IconColor="Color.Error" OnClick="() => Cancel(context)">Отменить</MudMenuItem>
+                            </MudMenu>
                         }
                     </MudTd>
                 </RowTemplate>
@@ -122,11 +165,14 @@
 }
 
 @code {
+    static readonly System.Globalization.CultureInfo Ru = new("ru-RU");
+
     DateTime _currentMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
     DateTime? _selectedDate;
     bool _loading;
-    List<AppointmentDto> _monthAppointments = [];
-    string? _token;
+    List<AppointmentItem> _monthAppointments = [];
+    List<ProcedureItem> _procedures = [];
+    List<MasterItem> _masters = [];
 
     int StartOffset => ((int)_currentMonth.DayOfWeek + 6) % 7; // Mon=0, Sun=6
     int DaysInMonth => DateTime.DaysInMonth(_currentMonth.Year, _currentMonth.Month);
@@ -139,32 +185,28 @@
     }
 
     int AppointmentCountFor(DateTime date) =>
-        _monthAppointments.Count(a => a.ScheduledAt.Date == date.Date);
+        _monthAppointments.Count(a => a.ScheduledAt.Date == date.Date && !a.IsCancelled);
 
-    List<AppointmentDto> AppointmentsFor(DateTime date) =>
+    List<AppointmentItem> AppointmentsFor(DateTime date) =>
         _monthAppointments
             .Where(a => a.ScheduledAt.Date == date.Date)
-            .OrderBy(a => a.ScheduledAt)
+            .OrderBy(a => a.IsCancelled).ThenBy(a => a.ScheduledAt)
             .ToList();
 
     protected override async Task OnInitializedAsync()
     {
-        _token = await JS.InvokeAsync<string>("localStorage.getItem", "jwt");
+        if (!await Api.EnsureSignedInAsync(JS, Nav)) return;
+        var procedures = Api.GetProcedureListAsync();
+        var masters = Api.GetMastersAsync();
         await LoadMonthAsync();
+        _procedures = await procedures;
+        _masters = await masters;
     }
 
     async Task LoadMonthAsync()
     {
         _loading = true;
-        try
-        {
-            var monthParam = _currentMonth.ToString("yyyy-MM");
-            var request = new HttpRequestMessage(HttpMethod.Get, $"api/appointments?month={monthParam}");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
-            var response = await Http.SendAsync(request);
-            if (response.IsSuccessStatusCode)
-                _monthAppointments = await response.Content.ReadFromJsonAsync<List<AppointmentDto>>() ?? [];
-        }
+        try { _monthAppointments = await Api.GetAppointmentsAsync(_currentMonth.ToString("yyyy-MM")); }
         finally { _loading = false; }
     }
 
@@ -187,41 +229,100 @@
         await LoadMonthAsync();
     }
 
-    Task Confirm(AppointmentDto appt) => SetStatus(appt, "Confirmed");
-    Task Cancel(AppointmentDto appt)  => SetStatus(appt, "Cancelled");
-
-    async Task SetStatus(AppointmentDto appt, string status)
+    async Task NewBooking(DateTime? date)
     {
-        var request = new HttpRequestMessage(HttpMethod.Patch, $"api/appointments/{appt.Id}/status")
+        if (_procedures.Count == 0)
         {
-            Content = JsonContent.Create(new { Status = status })
-        };
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
-        var response = await Http.SendAsync(request);
-        if (response.IsSuccessStatusCode)
+            Snackbar.Add("Сначала добавьте процедуры на странице «Процедуры».", Severity.Info);
+            return;
+        }
+        var dialog = await Dialogs.ShowAsync<BookingDialog>("Новая запись", new DialogParameters<BookingDialog>
         {
-            Snackbar.Add(status == "Confirmed" ? "Запись подтверждена" : "Запись отменена",
-                         status == "Confirmed" ? Severity.Success : Severity.Warning);
+            { x => x.Procedures, _procedures }, { x => x.Masters, _masters }, { x => x.Date, date ?? DateTime.Today }
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+        if (await dialog.Result is { Canceled: false, Data: DateTime at })
+            await AfterChange(at, "Запись добавлена");
+    }
+
+    async Task Reschedule(AppointmentItem appt)
+    {
+        var dialog = await Dialogs.ShowAsync<BookingDialog>("Перенести", new DialogParameters<BookingDialog>
+        {
+            { x => x.Procedures, _procedures }, { x => x.Masters, _masters }, { x => x.Appointment, appt }
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+        if (await dialog.Result is { Canceled: false, Data: DateTime at })
+            await AfterChange(at, "Запись перенесена");
+    }
+
+    async Task AfterChange(DateTime at, string message)
+    {
+        Snackbar.Add(message, Severity.Success);
+        _currentMonth = new DateTime(at.Year, at.Month, 1);
+        _selectedDate = at.Date;
+        await LoadMonthAsync();
+    }
+
+    async Task Confirm(AppointmentItem appt)
+    {
+        if ((await Api.SetAppointmentStatusAsync(appt.Id, "Confirmed", notifyClient: false)).IsSuccessStatusCode)
+        {
+            Snackbar.Add("Запись подтверждена", Severity.Success);
             await LoadMonthAsync();
         }
     }
 
-    static Color StatusColor(string status) => status switch
+    async Task Cancel(AppointmentItem appt)
     {
-        "Confirmed" => Color.Success,
-        "Cancelled" => Color.Error,
-        _           => Color.Warning
+        var ok = await Dialogs.ShowMessageBoxAsync("Отменить запись?",
+            $"{appt.ClientName}, {appt.ProcedureName}, {appt.ScheduledAt.ToString("d MMMM в HH:mm", Ru)}. " +
+            (appt.HasTelegram ? "Клиент получит сообщение об отмене в Telegram." : "Клиент записан не через бота — сообщите ему сами."),
+            yesText: "Отменить запись", cancelText: "Назад");
+        if (ok != true) return;
+        if ((await Api.SetAppointmentStatusAsync(appt.Id, "Cancelled", notifyClient: true)).IsSuccessStatusCode)
+        {
+            Snackbar.Add("Запись отменена", Severity.Warning);
+            await LoadMonthAsync();
+        }
+    }
+
+    async Task ToggleNoShow(AppointmentItem appt)
+    {
+        if ((await Api.SetNoShowAsync(appt.Id, !appt.NoShow)).IsSuccessStatusCode)
+            await LoadMonthAsync();
+    }
+
+    static string Plural(int n, string one, string few, string many) =>
+        (n % 10 == 1 && n % 100 != 11) ? one : (n % 10 is >= 2 and <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? few : many;
+
+    static string SourceIcon(string source) => source switch
+    {
+        "Manual" => Icons.Material.Rounded.EditNote,
+        "Integration" => Icons.Material.Rounded.Cable,
+        _ => Icons.Material.Rounded.SmartToy
     };
 
-    static string StatusLabel(string status) => status switch
+    static string SourceLabel(string source) => source switch
     {
-        "Confirmed" => "Подтверждено",
-        "Cancelled" => "Отменено",
-        _           => "Ожидание"
+        "Manual" => "Записан вручную",
+        "Integration" => "Из CRM",
+        _ => "Записал бот"
     };
 
-    record AppointmentDto(
-        Guid Id, string ProcedureName, string ClientName, string ClientPhone,
-        DateTime ScheduledAt, int DurationMinutes, string Status,
-        DateTime CreatedAt, DateTime UpdatedAt);
+    static Color StatusColor(AppointmentItem a) => a switch
+    {
+        { IsCancelled: true } => Color.Error,
+        { NoShow: true } => Color.Dark,
+        _ when a.ScheduledAt < DateTime.Now => Color.Info,
+        { Status: "Confirmed" } => Color.Success,
+        _ => Color.Warning
+    };
+
+    static string StatusLabel(AppointmentItem a) => a switch
+    {
+        { IsCancelled: true } => "Отменено",
+        { NoShow: true } => "Не пришёл",
+        _ when a.ScheduledAt < DateTime.Now => "Состоялся",
+        { Status: "Confirmed" } => "Подтверждено",
+        _ => "Ожидает"
+    };
 }
