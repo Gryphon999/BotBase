@@ -40,7 +40,7 @@ public class KnowledgeController(AppDbContext db, FileParserService parser) : Co
         db.KnowledgeChunks.Add(chunk);
         await db.SaveChangesAsync();
 
-        return Ok(new KnowledgeChunkResponse(chunk.Id, chunk.FileName, chunk.UploadedAt, chunk.ExtractedText.Length));
+        return Ok(new KnowledgeChunkResponse(chunk.Id, chunk.FileName, chunk.UploadedAt, chunk.ExtractedText.Length, IsBroken(chunk.ExtractedText)));
     }
 
     [HttpGet]
@@ -50,9 +50,25 @@ public class KnowledgeController(AppDbContext db, FileParserService parser) : Co
         var chunks = await db.KnowledgeChunks
             .Where(c => c.BusinessId == businessId)
             .OrderByDescending(c => c.UploadedAt)
-            .Select(c => new KnowledgeChunkResponse(c.Id, c.FileName, c.UploadedAt, c.ExtractedText.Length))
+            .Select(c => new { c.Id, c.FileName, c.UploadedAt, Full = c.ExtractedText.Length, Text = c.ExtractedText.Trim() })
             .ToListAsync();
-        return Ok(chunks);
+
+        return Ok(chunks.Select((c, i) => new KnowledgeChunkResponse(
+            c.Id, c.FileName, c.UploadedAt, c.Full, IsBroken(c.Text),
+            // Дубль — если весь текст файла уже есть в другом файле (при полном совпадении дублем считаем более старый).
+            chunks.Where((o, j) => j != i && c.Text.Length > 0
+                    && (o.Text.Length > c.Text.Length || (o.Text.Length == c.Text.Length && j < i))
+                    && o.Text.Contains(c.Text, StringComparison.Ordinal))
+                .Select(o => o.FileName).FirstOrDefault())));
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> Get(Guid id)
+    {
+        var businessId = User.GetBusinessId();
+        var chunk = await db.KnowledgeChunks.FirstOrDefaultAsync(c => c.Id == id && c.BusinessId == businessId);
+        if (chunk is null) return NotFound();
+        return Ok(new KnowledgeChunkDetails(chunk.Id, chunk.FileName, chunk.UploadedAt, chunk.ExtractedText, IsBroken(chunk.ExtractedText)));
     }
 
     [HttpDelete("{id:guid}")]
@@ -67,4 +83,8 @@ public class KnowledgeController(AppDbContext db, FileParserService parser) : Co
         await db.SaveChangesAsync();
         return NoContent();
     }
+
+    // Тот же порог, что в KnowledgeRetriever: от 30% «�» текст для бота бесполезен.
+    static bool IsBroken(string text) =>
+        text.Length > 0 && text.Count(ch => ch == '�') >= text.Length * 0.3;
 }

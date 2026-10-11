@@ -2,6 +2,7 @@
 @inject ApiClient Api
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject IDialogService Dialogs
 
 <PageTitle>База знаний · BotBase</PageTitle>
 
@@ -44,6 +45,12 @@ else if (_chunks.Count == 0)
 }
 else
 {
+    @if (_chunks.Any(c => c.Broken))
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3">
+            Некоторые файлы повреждены — бот не может их прочитать. Удалите их и загрузите исходные документы ещё раз.
+        </MudAlert>
+    }
     <MudTable Items="_chunks" Hover="true">
         <HeaderContent>
             <MudTh>Файл</MudTh>
@@ -52,13 +59,28 @@ else
             <MudTh></MudTh>
         </HeaderContent>
         <RowTemplate>
-            <MudTd>@context.FileName</MudTd>
-            <MudTd>@context.TextLength символов</MudTd>
-            <MudTd>@context.UploadedAt.ToString("dd.MM.yyyy HH:mm")</MudTd>
             <MudTd>
-                <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                               Color="Color.Error"
-                               OnClick="() => Delete(context.Id)" />
+                <span class="bb-kb-name" @onclick="() => View(context)">@context.FileName</span>
+                @if (context.Broken)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text" Class="ml-2">Повреждён — загрузите заново</MudChip>
+                }
+                else if (context.DuplicateOf is not null)
+                {
+                    <MudTooltip Text="@($"Весь текст этого файла уже есть в «{context.DuplicateOf}». Его можно удалить.")">
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text" Class="ml-2">Повтор</MudChip>
+                    </MudTooltip>
+                }
+            </MudTd>
+            <MudTd>@context.TextLength.ToString("N0") символов</MudTd>
+            <MudTd>@context.UploadedAt.ToString("dd.MM.yyyy HH:mm")</MudTd>
+            <MudTd Style="white-space:nowrap">
+                <MudTooltip Text="Посмотреть текст">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" OnClick="() => View(context)" />
+                </MudTooltip>
+                <MudTooltip Text="Удалить">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="() => Delete(context)" />
+                </MudTooltip>
             </MudTd>
         </RowTemplate>
     </MudTable>
@@ -110,11 +132,28 @@ else
         _uploading = false;
     }
 
-    async Task Delete(Guid id)
+    async Task View(KnowledgeChunkResponse chunk)
     {
-        await Api.DeleteKnowledgeAsync(id);
+        var details = await Api.GetKnowledgeItemAsync(chunk.Id);
+        if (details is null) return;
+        await Dialogs.ShowAsync<KnowledgeViewDialog>(chunk.FileName,
+            new DialogParameters<KnowledgeViewDialog>
+            {
+                { x => x.FileName, details.FileName },
+                { x => x.Text, details.Text },
+                { x => x.Broken, details.Broken }
+            },
+            new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+    }
+
+    async Task Delete(KnowledgeChunkResponse chunk)
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Удалить файл?",
+            $"Бот перестанет использовать информацию из «{chunk.FileName}».", yesText: "Удалить", cancelText: "Отмена");
+        if (ok != true) return;
+        await Api.DeleteKnowledgeAsync(chunk.Id);
         await LoadChunks();
     }
 
-    record KnowledgeChunkResponse(Guid Id, string FileName, DateTime UploadedAt, int TextLength);
+    record KnowledgeChunkResponse(Guid Id, string FileName, DateTime UploadedAt, int TextLength, bool Broken, string? DuplicateOf);
 }
