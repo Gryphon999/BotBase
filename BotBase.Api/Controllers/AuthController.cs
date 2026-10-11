@@ -11,12 +11,26 @@ public class AuthController(AuthService auth, PlatformSettingsService settings) 
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest req)
     {
+        // Без проверки на проде появился аккаунт с email «test» — войти в него нельзя (браузер не отправит такой email).
+        if (string.IsNullOrWhiteSpace(req.BusinessName))
+            return BadRequest(new { error = "Укажите название бизнеса" });
+        if (!IsValidEmail(req.Email))
+            return BadRequest(new { error = "Укажите корректный email — он нужен для входа и восстановления пароля" });
+        if (req.Password is not { Length: >= PasswordService.MinLength })
+            return BadRequest(new { error = $"Пароль должен быть не короче {PasswordService.MinLength} символов" });
+
         var business = await auth.RegisterAsync(req.Email, req.Password, req.BusinessName);
         if (business is null)
             return BadRequest(new { error = "Email уже используется" });
         var token = auth.GenerateJwt(business);
         return Ok(new LoginResponse(token, business.BusinessName));
     }
+
+    static bool IsValidEmail(string? email) =>
+        !string.IsNullOrWhiteSpace(email)
+        && System.Net.Mail.MailAddress.TryCreate(email.Trim(), out var addr)
+        && addr.Address == email.Trim()
+        && addr.Host.Contains('.');
 
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest req)
