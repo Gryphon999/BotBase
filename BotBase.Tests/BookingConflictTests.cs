@@ -58,9 +58,11 @@ public class BookingConflictTests(PostgresFixture pg)
 
         app.Ai.Respond = (_, _) => BookingReply("Анна", Slot);
         await http.PostAsJsonAsync($"webhook/{id}", Update(Anna, "Криолиполиз, 6 манипул"));
+        await app.Telegram.WaitFor(Anna);
 
         app.Ai.Respond = (_, _) => BookingReply("Виктор", Slot);
         await http.PostAsJsonAsync($"webhook/{id}", Update(Viktor, "6"));
+        await app.Telegram.WaitFor(Viktor);
 
         Assert.Equal(1, await CountAppointments(app));
 
@@ -82,10 +84,12 @@ public class BookingConflictTests(PostgresFixture pg)
 
         app.Ai.Respond = (_, _) => BookingReply("Анна", Slot);
         await http.PostAsJsonAsync($"webhook/{id}", Update(Anna, "Записаться"));
+        await app.Telegram.WaitFor(Anna);
 
         app.Ai.Prompts.Clear();
         app.Ai.Respond = (_, _) => "На какое время вас записать?";
         await http.PostAsJsonAsync($"webhook/{id}", Update(Viktor, "Хочу записаться"));
+        await app.Telegram.WaitFor(Viktor);
 
         Assert.Contains(app.Ai.Prompts, p => p.Contains(Slot.ToString("dd.MM.yyyy HH:mm")));
     }
@@ -99,6 +103,7 @@ public class BookingConflictTests(PostgresFixture pg)
         app.Ai.Respond = (_, history) => BookingReply("Клиент", Slot);
         await Task.WhenAll(Enumerable.Range(0, 6).Select(i =>
             app.CreateClient().PostAsJsonAsync($"webhook/{id}", Update(200 + i, "6"))));
+        foreach (var i in Enumerable.Range(0, 6)) await app.Telegram.WaitFor(200 + i);
 
         Assert.Equal(1, await CountAppointments(app));
         Assert.Equal(5, Enumerable.Range(0, 6).Count(i => app.Telegram.To(200 + i).Last().Contains("занято", StringComparison.OrdinalIgnoreCase)));
@@ -112,6 +117,7 @@ public class BookingConflictTests(PostgresFixture pg)
 
         app.Ai.Respond = (_, _) => BookingReply("Анна", Slot.Date.AddHours(20)); // рабочий день до 18:00
         await app.CreateClient().PostAsJsonAsync($"webhook/{id}", Update(Anna, "в 20:00"));
+        await app.Telegram.WaitFor(Anna);
 
         Assert.Equal(0, await CountAppointments(app));
         var reply = app.Telegram.To(Anna).Last();

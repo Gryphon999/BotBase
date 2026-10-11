@@ -50,11 +50,17 @@ builder.Services.AddScoped<TelegramService>();
 builder.Services.AddScoped<AnthropicService>();
 builder.Services.AddScoped<FileParserService>();
 builder.Services.AddScoped<CrmWebhookService>();
-builder.Services.AddSingleton<GeminiRateLimiter>();
 builder.Services.AddScoped<AdminAuthService>();
 builder.Services.AddScoped<PlatformSettingsService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<PasswordService>();
+builder.Services.Configure<BotOptions>(builder.Configuration.GetSection("Bot"));
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ChatQueue>();
+builder.Services.AddSingleton<AiGateway>();
+builder.Services.AddSingleton<KnowledgeRetriever>();
+builder.Services.AddScoped<BotReplyService>();
+builder.Services.AddHostedService<BotWorker>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

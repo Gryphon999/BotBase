@@ -28,6 +28,17 @@ public class TelegramService(IHttpClientFactory httpFactory)
         return resp.IsSuccessStatusCode;
     }
 
+    // «печатает…» в чате клиента, пока бот готовит ответ (держится ~5 секунд).
+    public virtual async Task SendTypingAsync(string token, long chatId)
+    {
+        try
+        {
+            var client = httpFactory.CreateClient();
+            await client.PostAsJsonAsync($"https://api.telegram.org/bot{token}/sendChatAction", new { chat_id = chatId, action = "typing" });
+        }
+        catch { /* индикатор не критичен */ }
+    }
+
     public virtual async Task SendMessageAsync(string token, long chatId, string text)
     {
         var client = httpFactory.CreateClient();

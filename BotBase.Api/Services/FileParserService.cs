@@ -15,7 +15,7 @@ public class FileParserService
             ".pdf" => ExtractFromPdf(stream),
             ".docx" => ExtractFromWord(stream),
             ".xlsx" or ".xls" => ExtractFromExcel(stream),
-            ".txt" => new StreamReader(stream).ReadToEnd(),
+            ".txt" => ExtractFromText(stream),
             _ => throw new NotSupportedException($"Формат {ext} не поддерживается. Используйте PDF, DOCX, XLSX или TXT.")
         };
     }
@@ -25,6 +25,32 @@ public class FileParserService
         using var pdf = PdfDocument.Open(stream);
         return string.Join("\n", pdf.GetPages().Select(p => p.Text));
     }
+
+    // Блокнот Windows часто сохраняет русский текст в Windows-1251. Раньше такой файл читался как UTF-8
+    // и превращался в «����» (на проде — 24 тыс. испорченных символов). Порядок: BOM → строгий UTF-8 → Windows-1251.
+    private static string ExtractFromText(Stream stream)
+    {
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        var bytes = ms.ToArray();
+        using (var bomReader = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
+        {
+            bomReader.Peek();
+            if (!Equals(bomReader.CurrentEncoding, Encoding.UTF8) || HasUtf8Bom(bytes))
+                return bomReader.ReadToEnd();
+        }
+        try
+        {
+            return new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            return Encoding.GetEncoding(1251).GetString(bytes);
+        }
+    }
+
+    private static bool HasUtf8Bom(byte[] b) => b.Length >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF;
 
     private static string ExtractFromWord(Stream stream)
     {
