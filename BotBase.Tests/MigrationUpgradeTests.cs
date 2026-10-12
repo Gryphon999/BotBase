@@ -11,7 +11,7 @@ namespace BotBase.Tests;
 public class MigrationUpgradeTests(PostgresFixture pg)
 {
     // Последняя миграция, которая сейчас применена на проде (Railway). Обновлять после каждого деплоя с миграцией.
-    const string ProductionMigration = "20261011184817_AddCrmAccessAndLanguage";
+    const string ProductionMigration = "20261012101434_AddPrivacyConsent";
 
     // Миграции, в которых есть SQL: только INSERT/UPDATE новых столбцов, без удаления данных. Каждая проверена
     // тестом на данных в формате прода (AddCrmLite — CrmLite_backfill_builds_clients_from_old_appointments).
