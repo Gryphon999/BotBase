@@ -11,10 +11,10 @@ namespace BotBase.Tests;
 public class MigrationUpgradeTests(PostgresFixture pg)
 {
     // Последняя миграция, которая сейчас применена на проде (Railway). Обновлять после каждого деплоя с миграцией.
-    const string ProductionMigration = "20261011121540_AddPasswordReset";
+    const string ProductionMigration = "20261011184817_AddCrmAccessAndLanguage";
 
     // Миграции, в которых есть SQL: только INSERT/UPDATE новых столбцов, без удаления данных. Каждая проверена
-    // тестом Production_data_survives_all_new_migrations на данных в формате прода.
+    // тестом на данных в формате прода (AddCrmLite — CrmLite_backfill_builds_clients_from_old_appointments).
     static readonly string[] ReviewedDataMigrations = ["20261011173951_AddCrmLite"];
 
     AppDbContext Db(string cs) => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs).Options);
@@ -22,12 +22,45 @@ public class MigrationUpgradeTests(PostgresFixture pg)
     [Fact]
     public async Task Production_data_survives_all_new_migrations()
     {
+        var cs = await SeedAtAsync(ProductionMigration);
+
+        await using var db = Db(cs);
+        await db.Database.MigrateAsync(); // всё, что появилось после прода
+        await AssertDataSurvivedAsync(db);
+    }
+
+    // AddCrmLite уже на проде, но перенос данных фиксируем: стартуем с прода до CRM (AddPasswordReset).
+    [Fact]
+    public async Task CrmLite_backfill_builds_clients_from_old_appointments()
+    {
+        var cs = await SeedAtAsync("20261011121540_AddPasswordReset");
+
+        await using var db = Db(cs);
+        await db.Database.MigrateAsync();
+        await AssertDataSurvivedAsync(db);
+        var b = await db.Businesses.SingleAsync();
+
+        // CRM-лайт (миграция AddCrmLite): из старых записей появилась одна карточка клиента на номер (разный формат номера — один клиент),
+        // с Telegram-чатом из разговора, цена записи — из прайса; настройки по умолчанию у старого бизнеса.
+        var client = await db.Clients.SingleAsync();
+        Assert.Equal(("37491123456", 777L), (client.PhoneKey, client.TelegramChatId!.Value));
+        Assert.All(await db.Appointments.ToListAsync(), a => Assert.Equal((client.Id, 2500m), (a.ClientId!.Value, a.Price!.Value)));
+        Assert.Equal((true, "Asia/Yerevan", 45, false, false), (b.RemindersEnabled, b.TimeZone, b.WinbackAfterDays, b.WinbackEnabled, b.ReviewRequestsEnabled));
+        // Доступ к CRM (тариф «Бизнес») у существующих бизнесов закрыт, пока его не откроет админ; язык автосообщений — русский.
+        Assert.Equal((false, (DateTime?)null, "ru"), (b.CrmEnabled, b.CrmUntil, b.MessagesLanguage));
+        // Прошедший визит помечен — автосообщения о нём не уйдут.
+        Assert.NotNull((await db.Appointments.SingleAsync(a => a.ClientName == "Аня")).ReminderSentAt);
+    }
+
+    // База в состоянии миграции migration с данными в формате прода.
+    async Task<string> SeedAtAsync(string migration)
+    {
         var cs = pg.NewDatabase();
         var hash = BCrypt.Net.BCrypt.HashPassword("x");
 
         await using (var db = Db(cs))
         {
-            await db.GetService<IMigrator>().MigrateAsync(ProductionMigration);
+            await db.GetService<IMigrator>().MigrateAsync(migration);
             // Данные вставляем обычным SQL под схему прода — текущая модель EF может быть уже новее.
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Businesses" ("Id","Email","PasswordHash","BusinessName","BotToken","IsActive","CreatedAt","CrmWebhookUrl","OwnerNotificationChatId")
@@ -51,34 +84,23 @@ public class MigrationUpgradeTests(PostgresFixture pg)
                 VALUES (gen_random_uuid(),'33333333-3333-3333-3333-333333333333',false,'Помогите',now());
                 """);
         }
+        return cs;
+    }
 
-        await using (var db = Db(cs))
-        {
-            await db.Database.MigrateAsync(); // всё, что появилось после прода
-
-            Assert.Empty(await db.Database.GetPendingMigrationsAsync());
-            var b = await db.Businesses.SingleAsync();
-            Assert.Equal(("salon@test.am", "Салон", "123:abc", 42L, true), (b.Email, b.BusinessName, b.BotToken, b.OwnerNotificationChatId!.Value, b.IsActive));
-            Assert.Equal("https://crm.test/hook", b.CrmWebhookUrl);
-            Assert.True(BCrypt.Net.BCrypt.Verify("x", b.PasswordHash));
-            Assert.Equal(2500, (await db.Procedures.SingleAsync()).Price);
-            Assert.Equal(new TimeOnly(18, 0), (await db.WorkSchedules.SingleAsync()).EndTime);
-            Assert.Equal("Прайс", (await db.KnowledgeChunks.SingleAsync()).ExtractedText);
-            Assert.Equal("Здравствуйте", (await db.Messages.SingleAsync()).Content);
-            Assert.Equal(["Анна", "Аня"], (await db.Appointments.OrderByDescending(a => a.ScheduledAt).ToListAsync()).Select(a => a.ClientName));
-
-            // CRM-лайт (миграция AddCrmLite): из старых записей появилась одна карточка клиента на номер (разный формат номера — один клиент),
-            // с Telegram-чатом из разговора, цена записи — из прайса; настройки по умолчанию у старого бизнеса.
-            var client = await db.Clients.SingleAsync();
-            Assert.Equal(("37491123456", 777L), (client.PhoneKey, client.TelegramChatId!.Value));
-            Assert.All(await db.Appointments.ToListAsync(), a => Assert.Equal((client.Id, 2500m), (a.ClientId!.Value, a.Price!.Value)));
-            Assert.Equal((true, "Asia/Yerevan", 45, false, false), (b.RemindersEnabled, b.TimeZone, b.WinbackAfterDays, b.WinbackEnabled, b.ReviewRequestsEnabled));
-            // Доступ к CRM (тариф «Бизнес») у существующих бизнесов закрыт, пока его не откроет админ; язык автосообщений — русский.
-            Assert.Equal((false, (DateTime?)null, "ru"), (b.CrmEnabled, b.CrmUntil, b.MessagesLanguage));
-            // Прошедший визит помечен — автосообщения о нём не уйдут.
-            Assert.NotNull((await db.Appointments.SingleAsync(a => a.ClientName == "Аня")).ReminderSentAt);
-            Assert.Equal("Помогите", (await db.SupportMessages.SingleAsync()).Text);
-        }
+    // Все старые данные на месте и миграций в очереди не осталось.
+    static async Task AssertDataSurvivedAsync(AppDbContext db)
+    {
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+        var b = await db.Businesses.SingleAsync();
+        Assert.Equal(("salon@test.am", "Салон", "123:abc", 42L, true), (b.Email, b.BusinessName, b.BotToken, b.OwnerNotificationChatId!.Value, b.IsActive));
+        Assert.Equal("https://crm.test/hook", b.CrmWebhookUrl);
+        Assert.True(BCrypt.Net.BCrypt.Verify("x", b.PasswordHash));
+        Assert.Equal(2500, (await db.Procedures.SingleAsync()).Price);
+        Assert.Equal(new TimeOnly(18, 0), (await db.WorkSchedules.SingleAsync()).EndTime);
+        Assert.Equal("Прайс", (await db.KnowledgeChunks.SingleAsync()).ExtractedText);
+        Assert.Equal("Здравствуйте", (await db.Messages.SingleAsync()).Content);
+        Assert.Equal(["Анна", "Аня"], (await db.Appointments.OrderByDescending(a => a.ScheduledAt).ToListAsync()).Select(a => a.ClientName));
+        Assert.Equal("Помогите", (await db.SupportMessages.SingleAsync()).Text);
     }
 
     [Fact]
