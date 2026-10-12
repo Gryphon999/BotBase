@@ -18,6 +18,8 @@ public class AuthController(AuthService auth, PlatformSettingsService settings) 
             return BadRequest(new { error = "Укажите корректный email — он нужен для входа и восстановления пароля" });
         if (req.Password is not { Length: >= PasswordService.MinLength })
             return BadRequest(new { error = $"Пароль должен быть не короче {PasswordService.MinLength} символов" });
+        if (!req.AcceptTerms)
+            return BadRequest(new { error = "Примите условия и политику конфиденциальности" });
 
         var business = await auth.RegisterAsync(req.Email, req.Password, req.BusinessName);
         if (business is null)

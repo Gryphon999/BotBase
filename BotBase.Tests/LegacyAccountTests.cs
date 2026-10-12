@@ -41,7 +41,7 @@ public class RegistrationValidationTests(PostgresFixture pg)
     public async Task Invalid_email_or_short_password_is_rejected(string email, string password)
     {
         using var app = new ApiFactory(pg.NewDatabase());
-        var resp = await app.CreateClient().PostAsJsonAsync("api/auth/register", new { email, password, businessName = "X" });
+        var resp = await app.CreateClient().PostAsJsonAsync("api/auth/register", new { email, password, businessName = "X", acceptTerms = true });
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 }

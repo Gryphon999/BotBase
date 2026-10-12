@@ -183,6 +183,9 @@ namespace BotBase.Api.Migrations
                     b.Property<string>("ReviewUrl")
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("TermsAcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("TimeZone")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -252,6 +255,9 @@ namespace BotBase.Api.Migrations
 
                     b.Property<Guid>("BusinessId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("PrivacyNoticeAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("timestamp with time zone");

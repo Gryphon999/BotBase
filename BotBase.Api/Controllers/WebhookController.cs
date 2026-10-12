@@ -13,7 +13,7 @@ namespace BotBase.Api.Controllers;
 // Ответ формирует BotWorker: склеивает серию сообщений, ждёт свободный лимит ИИ, показывает «печатает…».
 [ApiController]
 public class WebhookController(AppDbContext db, TelegramService telegram, ChatQueue queue, OwnerMessages ownerMessages,
-    ClientMessenger messenger, CrmWebhookService crmWebhook) : ControllerBase
+    ClientMessenger messenger, CrmWebhookService crmWebhook, IConfiguration config, ILogger<WebhookController> log) : ControllerBase
 {
     [HttpPost("webhook/{businessId:guid}")]
     public async Task<IActionResult> Handle(Guid businessId, [FromBody] Update update)
@@ -45,6 +45,8 @@ public class WebhookController(AppDbContext db, TelegramService telegram, ChatQu
         }
 
         var conversation = await GetOrCreateConversationAsync(businessId, chatId);
+        if (conversation.PrivacyNoticeAt is null)
+            await SendPrivacyNoticeAsync(business, conversation, text);
         db.Messages.Add(new DbMessage
         {
             Id = Guid.NewGuid(),
@@ -133,6 +135,24 @@ public class WebhookController(AppDbContext db, TelegramService telegram, ChatQu
             await telegram.AnswerCallbackAsync(token, callback.Id);
         }
         return Ok();
+    }
+
+    // Закон РА «О защите персональных данных»: клиента нужно предупредить об обработке данных до того, как бот ответит.
+    // Язык — по его сообщению; команда вроде /start ничего о языке не говорит, тогда язык бизнеса по умолчанию.
+    private async Task SendPrivacyNoticeAsync(Business business, DbConversation conversation, string text)
+    {
+        var lang = (text.StartsWith('/') ? null : ClientTexts.Detect(text)) ?? ClientTexts.Normalize(business.MessagesLanguage);
+        var policyUrl = $"{config["WebhookBaseUrl"]?.TrimEnd('/')}/privacy";
+        try
+        {
+            await telegram.SendMessageAsync(business.BotToken!, conversation.TelegramChatId, ClientTexts.PrivacyNotice(lang, business, policyUrl));
+            conversation.PrivacyNoticeAt = DateTime.UtcNow;
+        }
+        catch (Exception ex)
+        {
+            // Не получилось — попробуем со следующим сообщением; ответ клиенту из-за этого не задерживаем.
+            log.LogWarning(ex, "Privacy notice to chat {Chat} failed", conversation.TelegramChatId);
+        }
     }
 
     private async Task<DbConversation> GetOrCreateConversationAsync(Guid businessId, long chatId)

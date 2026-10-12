@@ -2,6 +2,8 @@
 @inject ApiClient Api
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
 
 <PageTitle>Разговоры · BotBase</PageTitle>
 
@@ -34,8 +36,11 @@ else
 
 <MudDrawer @bind-Open="_drawerOpen" Anchor="Anchor.End" Elevation="2"
            Variant="DrawerVariant.Temporary" Width="420px">
-    <MudDrawerHeader>
-        <MudText Typo="Typo.h6">Диалог с клиентом @_selected?.TelegramChatId</MudText>
+    <MudDrawerHeader Class="d-flex align-center">
+        <MudText Typo="Typo.h6" Style="flex:1">Диалог с клиентом @_selected?.TelegramChatId</MudText>
+        <MudTooltip Text="Удалить данные клиента (по его просьбе)">
+            <MudIconButton Icon="@Icons.Material.Rounded.DeleteForever" Color="Color.Error" OnClick="EraseData" />
+        </MudTooltip>
     </MudDrawerHeader>
     <div style="padding:16px; overflow-y:auto; height:calc(100% - 64px); display:flex; flex-direction:column; gap:8px;">
         @if (_messages is null)
@@ -97,6 +102,26 @@ else
             _messages = await resp.Content.ReadFromJsonAsync<List<MessageResponse>>();
         else
             _messages = [];
+    }
+
+    // Клиент попросил удалить его данные (право по политике конфиденциальности).
+    async Task EraseData()
+    {
+        if (_selected is null) return;
+        var ok = await Dialogs.ShowMessageBoxAsync("Удалить данные клиента?",
+            "Переписка и карточка клиента удалятся навсегда. В прошлых записях имя и телефон заменятся на «Удалён по запросу» — визиты останутся в статистике.",
+            yesText: "Удалить навсегда", cancelText: "Отмена");
+        if (ok != true) return;
+        var resp = await Api.DeleteConversationAsync(_selected.Id);
+        if (!resp.IsSuccessStatusCode)
+        {
+            Snackbar.Add((await ApiClient.ProblemAsync(resp)).Error, Severity.Error);
+            return;
+        }
+        _conversations?.Remove(_selected);
+        _selected = null;
+        _drawerOpen = false;
+        Snackbar.Add("Данные клиента удалены", Severity.Success);
     }
 
     record ConversationResponse(Guid Id, long TelegramChatId, DateTime StartedAt);

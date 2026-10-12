@@ -114,7 +114,7 @@ else
         }
         else
         {
-            Snackbar.Add("Сохранено", Severity.Success);
+            Snackbar.Add(result.Data is ClientDialog.DeletedAction ? "Данные клиента удалены" : "Сохранено", Severity.Success);
         }
         await Load();
     }

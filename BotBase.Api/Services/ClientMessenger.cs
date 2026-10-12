@@ -85,6 +85,12 @@ public static class ClientTexts
 
     static string T(string lang, string ru, string hy, string en) => lang switch { "hy" => hy, "en" => en, _ => ru };
 
+    // Один раз на чат, перед первым ответом: что за данные обрабатываем, кто готовит ответы, где политика.
+    public static string PrivacyNotice(string l, Business b, string policyUrl) => T(l,
+        $"ℹ️ Этот бот записывает на услуги «{b.BusinessName}». Чтобы ответить и записать вас, мы обрабатываем переписку, имя и телефон; ответы готовит ИИ (Google Gemini). Продолжая диалог, вы соглашаетесь с этим. Подробнее и как удалить данные: {policyUrl}",
+        $"ℹ️ Այս բոտը գրանցում է «{b.BusinessName}»-ի ծառայություններին։ Ձեզ պատասխանելու և գրանցելու համար մենք մշակում ենք նամակագրությունը, անունը և հեռախոսահամարը, պատասխանները պատրաստում է ԱԲ-ն (Google Gemini)։ Շարունակելով զրույցը՝ դուք համաձայնում եք դրան։ Մանրամասներ և տվյալների ջնջում՝ {policyUrl}",
+        $"ℹ️ This bot books appointments for «{b.BusinessName}». To reply and book you, we process your messages, name and phone number; replies are prepared by AI (Google Gemini). By continuing the chat you agree to this. Details and how to delete your data: {policyUrl}");
+
     static string Time(Appointment a) => a.ScheduledAt.ToString("HH:mm");
     static string Date(Appointment a) => a.ScheduledAt.ToString("dd.MM");
     static string When(string l, Appointment a) => T(l, $"{Date(a)} в {Time(a)}", $"{Date(a)}-ին ժամը {Time(a)}-ին", $"on {Date(a)} at {Time(a)}");
