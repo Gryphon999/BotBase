@@ -20,7 +20,8 @@ public class AuthService(AppDbContext db, IConfiguration config)
             Id = Guid.NewGuid(),
             Email = email.ToLower(),
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
-            BusinessName = businessName
+            BusinessName = businessName,
+            TermsAcceptedAt = DateTime.UtcNow
         };
         db.Businesses.Add(business);
         var defaultSchedule = Enumerable.Range(0, 7).Select(day => new WorkSchedule

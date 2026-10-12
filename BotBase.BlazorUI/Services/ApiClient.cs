@@ -13,8 +13,8 @@ public class ApiClient(HttpClient http)
     public void ClearToken() =>
         http.DefaultRequestHeaders.Authorization = null;
 
-    public Task<HttpResponseMessage> RegisterAsync(string email, string password, string businessName) =>
-        http.PostAsJsonAsync("api/auth/register", new { email, password, businessName });
+    public Task<HttpResponseMessage> RegisterAsync(string email, string password, string businessName, bool acceptTerms) =>
+        http.PostAsJsonAsync("api/auth/register", new { email, password, businessName, acceptTerms });
 
     public Task<HttpResponseMessage> LoginAsync(string email, string password) =>
         http.PostAsJsonAsync("api/auth/login", new { email, password });
@@ -49,6 +49,10 @@ public class ApiClient(HttpClient http)
 
     public Task<HttpResponseMessage> DeleteKnowledgeAsync(Guid id) =>
         http.DeleteAsync($"api/knowledge/{id}");
+
+    // Удаление данных клиента по его просьбе (переписка + карточка; в записях стираются имя и телефон).
+    public Task<HttpResponseMessage> DeleteConversationAsync(Guid id) => http.DeleteAsync($"api/conversations/{id}");
+    public Task<HttpResponseMessage> DeleteClientAsync(Guid id) => http.DeleteAsync($"api/clients/{id}");
 
     public Task<HttpResponseMessage> GetConversationsAsync() =>
         http.GetAsync("api/conversations");

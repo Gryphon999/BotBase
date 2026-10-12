@@ -1,5 +1,6 @@
 @* Карточка клиента: контакты, заметки, история визитов. Без Client — добавление нового клиента. *@
 @inject ApiClient Api
+@inject IDialogService Dialogs
 
 <MudDialog>
     <TitleContent>
@@ -58,6 +59,7 @@
         @if (Client is not null)
         {
             <MudButton StartIcon="@Icons.Material.Rounded.EventAvailable" Color="Color.Primary" OnClick="() => MudDialog.Close(DialogResult.Ok(BookAction))">Записать</MudButton>
+            <MudButton StartIcon="@Icons.Material.Rounded.DeleteForever" Color="Color.Error" OnClick="EraseData" Disabled="_saving">Удалить данные</MudButton>
             <MudSpacer />
         }
         <MudButton OnClick="() => MudDialog.Cancel()">Закрыть</MudButton>
@@ -66,7 +68,7 @@
 </MudDialog>
 
 @code {
-    public const string BookAction = "book";
+    public const string BookAction = "book", DeletedAction = "deleted";
 
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
     [Parameter] public ClientItem? Client { get; set; }
@@ -93,6 +95,21 @@
         { Rating: { } r } => $"{r} ⭐",
         _ => "был"
     };
+
+    // Клиент попросил удалить его данные (право по политике конфиденциальности).
+    async Task EraseData()
+    {
+        var ok = await Dialogs.ShowMessageBoxAsync("Удалить данные клиента?",
+            "Карточка, заметки и переписка с ботом удалятся навсегда. В прошлых записях имя и телефон заменятся на «Удалён по запросу» — визиты останутся в статистике.",
+            yesText: "Удалить навсегда", cancelText: "Отмена");
+        if (ok != true) return;
+        _saving = true;
+        _error = null;
+        var resp = await Api.DeleteClientAsync(Client!.Id);
+        _saving = false;
+        if (resp.IsSuccessStatusCode) { MudDialog.Close(DialogResult.Ok(DeletedAction)); return; }
+        _error = (await ApiClient.ProblemAsync(resp)).Error;
+    }
 
     async Task Save()
     {

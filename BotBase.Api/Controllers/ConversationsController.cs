@@ -1,5 +1,6 @@
 using BotBase.Api.Data;
 using BotBase.Api.Extensions;
+using BotBase.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +10,7 @@ namespace BotBase.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class ConversationsController(AppDbContext db) : ControllerBase
+public class ConversationsController(AppDbContext db, ClientDataService clientData) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetAll()
@@ -38,4 +39,9 @@ public class ConversationsController(AppDbContext db) : ControllerBase
             .ToListAsync();
         return Ok(messages);
     }
+
+    // Удаление данных клиента из «Разговоров» — доступно на любом тарифе (CRM-раздел «Клиенты» есть не у всех).
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id) =>
+        ClientsController.ToResponse(await clientData.EraseConversationAsync(User.GetBusinessId(), id));
 }

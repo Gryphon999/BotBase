@@ -73,7 +73,7 @@ public static class HttpExtensions
 
     public static async Task<string> RegisterAsync(this HttpClient client, string email, string name, string password = "Pass-12345")
     {
-        var resp = await client.PostAsJsonAsync("api/auth/register", new { email, password, businessName = name });
+        var resp = await client.PostAsJsonAsync("api/auth/register", new { email, password, businessName = name, acceptTerms = true });
         resp.EnsureSuccessStatusCode();
         return (await resp.Content.ReadFromJsonAsync<TokenResponse>())!.Token;
     }

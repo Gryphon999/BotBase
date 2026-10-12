@@ -14,7 +14,7 @@ namespace BotBase.Api.Controllers;
 [RequiresCrm]
 [ApiController]
 [Route("api/clients")]
-public class ClientsController(AppDbContext db, BookingService booking) : ControllerBase
+public class ClientsController(AppDbContext db, BookingService booking, ClientDataService clientData) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] string? search)
@@ -98,6 +98,17 @@ public class ClientsController(AppDbContext db, BookingService booking) : Contro
         await db.SaveChangesAsync();
         return NoContent();
     }
+
+    // Клиент попросил удалить его данные: карточка и переписка удаляются, в записях стираются имя и телефон.
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id) => ToResponse(await clientData.EraseClientAsync(User.GetBusinessId(), id));
+
+    internal static IActionResult ToResponse(EraseResult result) => result switch
+    {
+        EraseResult.Done => new NoContentResult(),
+        EraseResult.NotFound => new NotFoundResult(),
+        _ => new ConflictObjectResult(new { error = "У клиента есть предстоящие записи — сначала отмените их, потом удалите данные." })
+    };
 
     public record ClientRequest(string Name, string? Phone, string? Notes);
 

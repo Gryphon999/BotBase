@@ -42,7 +42,10 @@ public class FakeTelegram() : TelegramService(null!)
         return Task.CompletedTask;
     }
 
-    public List<string> To(long chatId) => Sent.Where(s => s.ChatId == chatId).Select(s => s.Text).ToList();
+    // Разговор с чатом без уведомления о данных: оно приходит один раз перед первым ответом, его проверяют PrivacyTests через AllTo.
+    public List<string> To(long chatId) => AllTo(chatId).Where(t => !IsPrivacyNotice(t)).ToList();
+    public List<string> AllTo(long chatId) => Sent.Where(s => s.ChatId == chatId).Select(s => s.Text).ToList();
+    public static bool IsPrivacyNotice(string text) => text.Contains("/privacy");
 
     // Кнопки последних сообщений: (чат, текст сообщения, данные кнопок).
     public ConcurrentQueue<(long ChatId, string Text, List<string> Data, List<string> Labels)> Buttons { get; } = new();

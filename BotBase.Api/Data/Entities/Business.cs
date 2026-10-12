@@ -11,6 +11,8 @@ public class Business
     public long? OwnerNotificationChatId { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    // Когда владелец принял условия и политику конфиденциальности (галочка при регистрации). null — аккаунт старше галочки.
+    public DateTime? TermsAcceptedAt { get; set; }
 
     // Сброс пароля по ссылке из письма: храним только SHA-256 токена и срок действия.
     public string? PasswordResetTokenHash { get; set; }

@@ -65,6 +65,7 @@ builder.Services.AddScoped<BookingService>();
 builder.Services.AddHostedService<BotWorker>();
 builder.Services.AddHostedService<AutomationWorker>();
 builder.Services.AddScoped<ClientMessenger>();
+builder.Services.AddScoped<ClientDataService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

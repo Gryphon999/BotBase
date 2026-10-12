@@ -17,6 +17,13 @@
                 <MudTextField @bind-Value="_businessName" Label="Название бизнеса" Variant="Variant.Outlined" Class="mb-4" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Storefront" />
                 <MudTextField @bind-Value="_email" Label="Email" InputType="InputType.Email" Variant="Variant.Outlined" Class="mb-4" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Mail" />
                 <MudTextField @bind-Value="_password" Label="Пароль" InputType="InputType.Password" Variant="Variant.Outlined" HelperText="Не меньше 6 символов" />
+                <div class="d-flex align-start mt-4">
+                    <MudCheckBox @bind-Value="_acceptTerms" Color="Color.Primary" Dense="true" />
+                    <MudText Typo="Typo.body2" Class="bb-sub" Style="padding-top:6px">
+                        Принимаю условия сервиса и <MudLink Href="/privacy" Target="_blank" Typo="Typo.body2" Style="font-weight:700">политику конфиденциальности</MudLink>.
+                        Данные клиентов моего бизнеса BotBase обрабатывает по моему поручению.
+                    </MudText>
+                </div>
                 @if (_error is not null)
                 {
                     <MudAlert Severity="Severity.Error" Class="mt-4">@_error</MudAlert>
@@ -33,15 +40,16 @@
 @code {
     string _businessName = "", _email = "", _password = "";
     string? _error;
-    bool _loading;
+    bool _loading, _acceptTerms;
 
     async Task Submit()
     {
         _error = null;
         if (string.IsNullOrWhiteSpace(_businessName) || string.IsNullOrWhiteSpace(_email)) { _error = "Заполните название и email"; return; }
         if (_password.Length < 6) { _error = "Пароль должен быть не короче 6 символов"; return; }
+        if (!_acceptTerms) { _error = "Примите условия и политику конфиденциальности"; return; }
         _loading = true;
-        var resp = await Api.RegisterAsync(_email, _password, _businessName);
+        var resp = await Api.RegisterAsync(_email, _password, _businessName, _acceptTerms);
         if (resp.IsSuccessStatusCode)
         {
             var result = await resp.Content.ReadFromJsonAsync<LoginResponse>();
